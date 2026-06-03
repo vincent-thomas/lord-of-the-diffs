@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 /**
@@ -9,7 +10,7 @@ import { dirname, join } from "node:path";
  * a follow-up user message is sent asking the agent to:
  *   1. Filter the findings — keep only those that improve general agent
  *      operation, not project/language-specific implementation details.
- *   2. Append the keepers to <cwd>/.pi/self-feedback.md as proactive checks:
+ *   2. Append the keepers to ~/.pi/agent/self-feedback.md as proactive checks:
  *      each entry states WHEN a check applies and WHAT to make sure of.
  *   3. Prune the file if it has grown redundant or long.
  *
@@ -46,8 +47,14 @@ function extractFindings(text: string): string[] {
     .filter((l) => /^[🔴🟡]/.test(l));
 }
 
-function feedbackFilePath(cwd: string): string {
-  return join(cwd, ".pi", "self-feedback.md");
+// Mirror pi's own getAgentDir() so the feedback file always lives next to
+// the rest of the user's pi config (~/.pi/agent/ by default).
+function getAgentDir(): string {
+  return process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
+}
+
+function feedbackFilePath(): string {
+  return join(getAgentDir(), "self-feedback.md");
 }
 
 function buildTaskMessage(findings: string[], feedbackFile: string): string {
@@ -97,7 +104,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── 1. Notify on session start if feedback exists ──────────────────────────
   pi.on("session_start", async (_event, ctx) => {
-    const feedbackFile = feedbackFilePath(ctx.cwd);
+    const feedbackFile = feedbackFilePath();
     if (!existsSync(feedbackFile)) return;
     const content = readFileSync(feedbackFile, "utf-8").trim();
     if (content) {
@@ -106,8 +113,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ── 2. Inject feedback into every agent turn's system prompt ───────────────
-  pi.on("before_agent_start", async (event, ctx) => {
-    const feedbackFile = feedbackFilePath(ctx.cwd);
+  pi.on("before_agent_start", async (event, _ctx) => {
+    const feedbackFile = feedbackFilePath();
     if (!existsSync(feedbackFile)) return;
     const content = readFileSync(feedbackFile, "utf-8").trim();
     if (!content) return;
@@ -126,7 +133,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ── 3. Detect findings and delegate curation to the agent ─────────────────
-  pi.on("agent_end", async (event, ctx) => {
+  pi.on("agent_end", async (event, _ctx) => {
     // Skip the run that was triggered by our own task message.
     if (awaitingFeedbackRun) {
       awaitingFeedbackRun = false;
@@ -137,8 +144,8 @@ export default function (pi: ExtensionAPI) {
     const findings = extractFindings(text);
     if (findings.length === 0) return;
 
-    const feedbackFile = feedbackFilePath(ctx.cwd);
-    // Ensure .pi/ exists so the agent can write without needing to create it.
+    const feedbackFile = feedbackFilePath();
+    // Ensure the agent dir exists so the agent can write without creating it.
     const dir = dirname(feedbackFile);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
