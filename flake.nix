@@ -34,96 +34,45 @@
           # tsgo and shx both ship as prebuilt/pure-JS so --ignore-scripts is safe.
           npmFlags = [ "--ignore-scripts" ];
 
-          # models.generated.ts / image-models.generated.ts are pre-committed, so
-          # we skip the network-fetching generate-* scripts and call tsgo directly
-          # for each workspace package in dependency order.
           buildPhase = ''
             runHook preBuild
 
-            root=$(pwd)
-            tsgo=$root/node_modules/.bin/tsgo
-            shx=$root/node_modules/.bin/shx
+            # Expose node_modules/.bin (tsgo, shx, …) to npm run scripts.
+            export PATH="$PWD/node_modules/.bin:$PATH"
 
-            for pkg in tui ai agent coding-agent; do
-              echo "--- building packages/$pkg ---"
-              (cd packages/$pkg && $tsgo -p tsconfig.build.json)
-            done
+            # packages/ai normally runs two network-fetching generate-* scripts
+            # before tsc; strip them — the generated files are pre-committed.
+            substituteInPlace packages/ai/package.json \
+              --replace "npm run generate-models && npm run generate-image-models && " ""
 
-            chmod +x packages/coding-agent/dist/cli.js
-
-            # Copy static assets (themes, export-html templates)
-            ca=packages/coding-agent
-            $shx mkdir -p $ca/dist/modes/interactive/theme
-            $shx cp $ca/src/modes/interactive/theme/*.json \
-                    $ca/dist/modes/interactive/theme/
-            $shx mkdir -p $ca/dist/core/export-html/vendor
-            $shx cp $ca/src/core/export-html/template.html \
-                    $ca/src/core/export-html/template.css \
-                    $ca/src/core/export-html/template.js \
-                    $ca/dist/core/export-html/
-            $shx cp $ca/src/core/export-html/vendor/*.js \
-                    $ca/dist/core/export-html/vendor/
+            # Build all workspaces in order (tui → ai → agent → coding-agent).
+            # The root build script also handles chmod and copy-assets for us.
+            npm run build
 
             runHook postBuild
           '';
 
-          # Custom install: assemble a self-contained package from the
-          # coding-agent workspace and replace all workspace symlinks with the
-          # real compiled dist/ trees so there are no dangling symlinks in $out.
           installPhase = ''
             runHook preInstall
 
-            pkg_root="$out/lib/node_modules/@earendil-works/pi-coding-agent"
-            mkdir -p "$pkg_root"
+            out_pkg="$out/lib/node_modules/@earendil-works/pi-coding-agent"
+            mkdir -p "$out_pkg"
 
-            # ── coding-agent own content ──────────────────────────────────────
-            cp packages/coding-agent/package.json "$pkg_root/"
-            cp packages/coding-agent/CHANGELOG.md "$pkg_root/" 2>/dev/null || true
-            cp -r packages/coding-agent/dist   "$pkg_root/"
-            cp -r packages/coding-agent/docs   "$pkg_root/" 2>/dev/null || true
+            cp packages/coding-agent/package.json \
+               packages/coding-agent/CHANGELOG.md \
+               "$out_pkg/"
+            cp -r packages/coding-agent/dist \
+                  packages/coding-agent/docs \
+                  packages/coding-agent/examples \
+                  "$out_pkg/"
 
-            # ── external node_modules (preserving symlinks for now) ───────────
-            cp -r node_modules "$pkg_root/"
+            # -L dereferences every workspace symlink on copy so $out contains
+            # no dangling symlinks and needs no manual fixup.
+            cp -rL node_modules "$out_pkg/"
 
-            # ── resolve workspace symlinks ────────────────────────────────────
-            # After cp -r the workspace symlinks still point to the original
-            # relative paths (e.g. ../../packages/tui) which no longer resolve
-            # relative to their new location in $pkg_root/node_modules.
-            # Replace each with a dist-only copy of the built workspace package.
-
-            resolve_ws() {          # resolve_ws <link_path> <src_pkg_dir>
-              local link="$1" src="$2"
-              if [ -L "$link" ]; then
-                rm "$link"
-                mkdir -p "$link"
-                cp "$src/package.json" "$link/"
-                [ -d "$src/dist" ] && cp -r "$src/dist" "$link/"
-              fi
-            }
-
-            nm="$pkg_root/node_modules"
-            resolve_ws "$nm/@earendil-works/pi-tui"         packages/tui
-            resolve_ws "$nm/@earendil-works/pi-ai"          packages/ai
-            resolve_ws "$nm/@earendil-works/pi-agent-core"  packages/agent
-            resolve_ws "$nm/@earendil-works/pi-coding-agent" packages/coding-agent
-
-            # Remove example-extension workspace symlinks (dev-only)
-            for ext in "$nm"/pi-extension-*; do
-              [ -L "$ext" ] && rm "$ext"
-            done
-
-            # ── fix .bin entries that pointed at workspace packages ───────────
-            # After the resolve_ws calls the real dist files exist, so most
-            # relative .bin symlinks now resolve correctly.  Only remove the
-            # ones that are still broken (shouldn't be any, but be defensive).
-            for b in "$nm/.bin/"*; do
-              [ -L "$b" ] && [ ! -e "$b" ] && rm "$b"
-            done
-
-            # ── pi binary wrapper ─────────────────────────────────────────────
             mkdir -p "$out/bin"
             makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$pkg_root/dist/cli.js"
+              --add-flags "$out_pkg/dist/cli.js"
 
             runHook postInstall
           '';
