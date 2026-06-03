@@ -18,25 +18,6 @@
         pkgs = nixpkgs.legacyPackages.${system};
         nodejs = pkgs.nodejs_24;
 
-        # On every `pi` invocation: symlink bundled extensions into
-        # ~/.pi/agent/extensions/, replacing stale Nix-store symlinks
-        # automatically (handles package updates).  User-managed entries
-        # (anything that isn't a Nix-store symlink) are left untouched.
-        setupExtensions = pkgs.writeShellScript "pi-setup-extensions" ''
-          [ -d "$PI_BUNDLED_EXTENSIONS" ] || exit 0
-          ext_dir="$HOME/.pi/agent/extensions"
-          mkdir -p "$ext_dir"
-          for ext in "$PI_BUNDLED_EXTENSIONS"/*; do
-            name=$(basename "$ext")
-            target="$ext_dir/$name"
-            if [ -L "$target" ]; then
-              old=$(readlink "$target")
-              case "$old" in /nix/store/*) rm "$target" ;; esac
-            fi
-            [ -e "$target" ] || ln -sf "$ext" "$target"
-          done
-        '';
-
         pi = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
           version = "0.78.0";
@@ -93,11 +74,17 @@
             mkdir -p "$out/share/pi/extensions"
             cp -r ${./extensions}/. "$out/share/pi/extensions/"
 
+            # Build --extension flags for every bundled extension (files and
+            # directories).  pi's --extension flag accepts both; directories are
+            # resolved to their index.ts by the loader.
+            ext_flags=""
+            for ext in "$out/share/pi/extensions"/*; do
+              ext_flags="$ext_flags --extension $ext"
+            done
+
             mkdir -p "$out/bin"
             makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$out_pkg/dist/cli.js" \
-              --set    PI_BUNDLED_EXTENSIONS "$out/share/pi/extensions" \
-              --run    "${setupExtensions}"
+              --add-flags "$out_pkg/dist/cli.js $ext_flags"
 
             runHook postInstall
           '';
