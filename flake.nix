@@ -70,21 +70,26 @@
             # no dangling symlinks and needs no manual fixup.
             cp -rL node_modules "$out_pkg/"
 
-            # Bundle the personal extensions from the flake repo.
+            # Bundle personal extensions and skills from the flake repo.
             mkdir -p "$out/share/pi/extensions"
             cp -r ${./extensions}/. "$out/share/pi/extensions/"
 
-            # Build --extension flags for every bundled extension (files and
-            # directories).  pi's --extension flag accepts both; directories are
-            # resolved to their index.ts by the loader.
-            ext_flags=""
+            mkdir -p "$out/share/pi/skills"
+            cp -r ${./skills}/. "$out/share/pi/skills/"
+
+            # Build --extension / --skill flags for every bundled item.
+            # pi accepts both file and directory paths for each flag.
+            extra_flags=""
             for ext in "$out/share/pi/extensions"/*; do
-              ext_flags="$ext_flags --extension $ext"
+              extra_flags="$extra_flags --extension $ext"
+            done
+            for skill in "$out/share/pi/skills"/*; do
+              extra_flags="$extra_flags --skill $skill"
             done
 
             mkdir -p "$out/bin"
             makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$out_pkg/dist/cli.js $ext_flags"
+              --add-flags "$out_pkg/dist/cli.js $extra_flags"
 
             runHook postInstall
           '';
