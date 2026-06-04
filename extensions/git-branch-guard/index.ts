@@ -48,47 +48,49 @@ export default function (pi: ExtensionAPI) {
 
   // ── 2. Intercept tool calls ───────────────────────────────────────────────
   pi.on("tool_call", async (event, ctx) => {
-    if (!guardedBranch) return; // Not in a git repo, nothing to protect.
-
     // ── bash ─────────────────────────────────────────────────────────────────
     if (isToolCallEventType("bash", event)) {
       const cmd = event.input.command ?? "";
 
-      // 2a. Inline command contains a branch switch
-      const inlineBad = findBranchSwitchInText(cmd);
-      if (inlineBad) {
-        ctx.ui.notify(
-          `git-branch-guard: blocked branch-switch in command:\n  ${inlineBad.slice(0, 120)}`,
-          "error"
-        );
-        return {
-          block: true,
-          reason:
-            `git-branch-guard: Switching branches is not allowed in this session. ` +
-            `You are locked to branch "${guardedBranch}". ` +
-            `Offending line: ${inlineBad}`,
-        };
-      }
-
-      // 2b. Command is executing a script file — read and scan it
-      for (const scriptPath of extractScriptPaths(cmd)) {
-        const scriptBad = findBranchSwitchInScript(scriptPath, ctx.cwd);
-        if (scriptBad) {
+      // 2a. Inline command contains a branch switch (requires a known guarded branch)
+      if (guardedBranch) {
+        const inlineBad = findBranchSwitchInText(cmd);
+        if (inlineBad) {
           ctx.ui.notify(
-            `git-branch-guard: blocked execution of "${scriptPath}" — ` +
-              `it contains a branch-switch:\n  ${scriptBad.slice(0, 120)}`,
+            `git-branch-guard: blocked branch-switch in command:\n  ${inlineBad.slice(0, 120)}`,
             "error"
           );
           return {
             block: true,
             reason:
-              `git-branch-guard: The script "${scriptPath}" contains a branch-switching ` +
-              `git command ("${scriptBad}"). Executing it is not allowed while locked ` +
-              `to branch "${guardedBranch}". Remove the offending line before running the script.`,
+              `git-branch-guard: Switching branches is not allowed in this session. ` +
+              `You are locked to branch "${guardedBranch}". ` +
+              `Offending line: ${inlineBad}`,
           };
         }
 
-        // 2c. Script file contains a git commit — ask for permission
+        // 2b. Command is executing a script file — scan it for branch switches
+        for (const scriptPath of extractScriptPaths(cmd)) {
+          const scriptBad = findBranchSwitchInScript(scriptPath, ctx.cwd);
+          if (scriptBad) {
+            ctx.ui.notify(
+              `git-branch-guard: blocked execution of "${scriptPath}" — ` +
+                `it contains a branch-switch:\n  ${scriptBad.slice(0, 120)}`,
+              "error"
+            );
+            return {
+              block: true,
+              reason:
+                `git-branch-guard: The script "${scriptPath}" contains a branch-switching ` +
+                `git command ("${scriptBad}"). Executing it is not allowed while locked ` +
+                `to branch "${guardedBranch}". Remove the offending line before running the script.`,
+            };
+          }
+        }
+      }
+
+      // 2c. Script file contains a git commit — ask for permission (always, regardless of branch)
+      for (const scriptPath of extractScriptPaths(cmd)) {
         const scriptCommit = findGitCommitInScript(scriptPath, ctx.cwd);
         if (scriptCommit) {
           const { allowed, why } = await askCommitPermission(
@@ -111,7 +113,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      // 2d. Inline command contains a git commit — ask for permission
+      // 2d. Inline command contains a git commit — ask for permission (always, regardless of branch)
       const inlineCommit = findGitCommitInText(cmd);
       if (inlineCommit) {
         const { allowed, why } = await askCommitPermission(
@@ -135,6 +137,9 @@ export default function (pi: ExtensionAPI) {
 
       return; // Bash command is clean.
     }
+
+    // Branch-drift checks for write/edit require knowing the guarded branch.
+    if (!guardedBranch) return;
 
     // ── write ─────────────────────────────────────────────────────────────────
     if (isToolCallEventType("write", event)) {
