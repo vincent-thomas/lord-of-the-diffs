@@ -8,14 +8,56 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import {
   currentBranch,
-  findBranchSwitchInText,
-  findBranchSwitchInScript,
+  findBranchSwitchWithKind,
+  findBranchSwitchInScriptWithKind,
   findGitCommitInText,
   findGitCommitInScript,
   extractScriptPaths,
   isShellScript,
+  isGitInternalPath,
   SHELL_EXTENSIONS,
+  type BranchSwitchKind,
 } from "./logic.ts";
+
+/** Human-readable label shown in the TUI notification. */
+function notifyLabel(kind: BranchSwitchKind): string {
+  return kind === "symbolic-ref"
+    ? "blocked git symbolic-ref (plumbing bypass)"
+    : "blocked branch-switch";
+}
+
+/**
+ * Detailed reason returned to the model so it understands what it did wrong
+ * and what the correct alternative is.
+ */
+function blockReason(
+  kind: BranchSwitchKind,
+  offendingLine: string,
+  guardedBranch: string,
+  source?: string // e.g. 'script "deploy.sh"' or undefined for inline
+): string {
+  const where = source ? `in ${source}` : "in command";
+  if (kind === "symbolic-ref") {
+    return (
+      `git-branch-guard: "git symbolic-ref" is not allowed. ` +
+      `This is a low-level plumbing command that rewrites .git/HEAD directly, ` +
+      `bypassing the branch guard entirely. ` +
+      `You are locked to branch "${guardedBranch}" for this session. ` +
+      `Do not use git symbolic-ref, or any other method that modifies ` +
+      `.git/HEAD outside of normal git checkout/switch. ` +
+      `Offending line ${where}: ${offendingLine}`
+    );
+  }
+  // checkout / switch
+  return (
+    `git-branch-guard: Switching branches is not allowed in this session. ` +
+    `You are locked to branch "${guardedBranch}". ` +
+    `Do not use "git checkout <branch>", "git checkout -b", or "git switch". ` +
+    `If you need to reference another branch use git diff, git log, or git show ` +
+    `without switching to it. ` +
+    `Offending line ${where}: ${offendingLine}`
+  );
+}
 
 export default function (pi: ExtensionAPI) {
   let guardedBranch: string | null = null;
@@ -54,36 +96,35 @@ export default function (pi: ExtensionAPI) {
 
       // 2a. Inline command contains a branch switch (requires a known guarded branch)
       if (guardedBranch) {
-        const inlineBad = findBranchSwitchInText(cmd);
-        if (inlineBad) {
+        const inlineHit = findBranchSwitchWithKind(cmd);
+        if (inlineHit) {
           ctx.ui.notify(
-            `git-branch-guard: blocked branch-switch in command:\n  ${inlineBad.slice(0, 120)}`,
+            `git-branch-guard: ${notifyLabel(inlineHit.kind)} in command:\n  ${inlineHit.line.slice(0, 120)}`,
             "error"
           );
           return {
             block: true,
-            reason:
-              `git-branch-guard: Switching branches is not allowed in this session. ` +
-              `You are locked to branch "${guardedBranch}". ` +
-              `Offending line: ${inlineBad}`,
+            reason: blockReason(inlineHit.kind, inlineHit.line, guardedBranch),
           };
         }
 
         // 2b. Command is executing a script file — scan it for branch switches
         for (const scriptPath of extractScriptPaths(cmd)) {
-          const scriptBad = findBranchSwitchInScript(scriptPath, ctx.cwd);
-          if (scriptBad) {
+          const scriptHit = findBranchSwitchInScriptWithKind(scriptPath, ctx.cwd);
+          if (scriptHit) {
             ctx.ui.notify(
               `git-branch-guard: blocked execution of "${scriptPath}" — ` +
-                `it contains a branch-switch:\n  ${scriptBad.slice(0, 120)}`,
+                `it contains a ${notifyLabel(scriptHit.kind)}:\n  ${scriptHit.line.slice(0, 120)}`,
               "error"
             );
             return {
               block: true,
-              reason:
-                `git-branch-guard: The script "${scriptPath}" contains a branch-switching ` +
-                `git command ("${scriptBad}"). Executing it is not allowed while locked ` +
-                `to branch "${guardedBranch}". Remove the offending line before running the script.`,
+              reason: blockReason(
+                scriptHit.kind,
+                scriptHit.line,
+                guardedBranch,
+                `script "${scriptPath}"`
+              ),
             };
           }
         }
@@ -143,6 +184,24 @@ export default function (pi: ExtensionAPI) {
 
     // ── write ─────────────────────────────────────────────────────────────────
     if (isToolCallEventType("write", event)) {
+      // 2b-pre. Block direct writes anywhere inside .git/
+      const writePath = event.input.path ?? "";
+      if (isGitInternalPath(writePath)) {
+        ctx.ui.notify(
+          `git-branch-guard: blocked write to "${writePath}" — .git/ is read-only`,
+          "error"
+        );
+        return {
+          block: true,
+          reason:
+            `git-branch-guard: Writing to "${writePath}" is not allowed. ` +
+            `The .git directory is git's internal state store; manually editing any file ` +
+            `inside it (HEAD, config, refs, hooks, etc.) bypasses normal git safety ` +
+            `mechanisms and the branch guard. You are locked to branch "${guardedBranch}". ` +
+            `Use the appropriate git commands instead of writing .git files directly.`,
+        };
+      }
+
       // 2c. Branch drift check
       const live = currentBranch(ctx.cwd);
       if (live !== null && live !== guardedBranch) {
@@ -162,19 +221,21 @@ export default function (pi: ExtensionAPI) {
       const path = event.input.path ?? "";
       const content = event.input.content ?? "";
       if (isShellScript(path, content)) {
-        const bad = findBranchSwitchInText(content);
-        if (bad) {
+        const hit = findBranchSwitchWithKind(content);
+        if (hit) {
           ctx.ui.notify(
             `git-branch-guard: blocked write of "${path}" — ` +
-              `script contains a branch-switch:\n  ${bad.slice(0, 120)}`,
+              `script contains a ${notifyLabel(hit.kind)}:\n  ${hit.line.slice(0, 120)}`,
             "error"
           );
           return {
             block: true,
-            reason:
-              `git-branch-guard: The shell script "${path}" you are trying to write ` +
-              `contains a branch-switching git command ("${bad}"). ` +
-              `Remove the offending line; you are locked to branch "${guardedBranch}".`,
+            reason: blockReason(
+              hit.kind,
+              hit.line,
+              guardedBranch,
+              `shell script "${path}" you are trying to write`
+            ),
           };
         }
       }
@@ -184,6 +245,24 @@ export default function (pi: ExtensionAPI) {
 
     // ── edit ──────────────────────────────────────────────────────────────────
     if (isToolCallEventType("edit", event)) {
+      // 2e-pre. Block direct edits anywhere inside .git/
+      const editPath = event.input.path ?? "";
+      if (isGitInternalPath(editPath)) {
+        ctx.ui.notify(
+          `git-branch-guard: blocked edit of "${editPath}" — .git/ is read-only`,
+          "error"
+        );
+        return {
+          block: true,
+          reason:
+            `git-branch-guard: Editing "${editPath}" is not allowed. ` +
+            `The .git directory is git's internal state store; manually editing any file ` +
+            `inside it (HEAD, config, refs, hooks, etc.) bypasses normal git safety ` +
+            `mechanisms and the branch guard. You are locked to branch "${guardedBranch}". ` +
+            `Use the appropriate git commands instead of editing .git files directly.`,
+        };
+      }
+
       // 2e. Branch drift check
       const live = currentBranch(ctx.cwd);
       if (live !== null && live !== guardedBranch) {
@@ -204,19 +283,21 @@ export default function (pi: ExtensionAPI) {
       const newText = event.input.newText ?? "";
       const ext = path.match(/(\.[^./\\]+)$/)?.[1]?.toLowerCase() ?? "";
       if (isShellScript(path, newText) || SHELL_EXTENSIONS.has(ext)) {
-        const bad = findBranchSwitchInText(newText);
-        if (bad) {
+        const hit = findBranchSwitchWithKind(newText);
+        if (hit) {
           ctx.ui.notify(
             `git-branch-guard: blocked edit of "${path}" — ` +
-              `new text contains a branch-switch:\n  ${bad.slice(0, 120)}`,
+              `new text contains a ${notifyLabel(hit.kind)}:\n  ${hit.line.slice(0, 120)}`,
             "error"
           );
           return {
             block: true,
-            reason:
-              `git-branch-guard: The edit to "${path}" introduces a branch-switching ` +
-              `git command ("${bad}"). ` +
-              `Remove the offending line; you are locked to branch "${guardedBranch}".`,
+            reason: blockReason(
+              hit.kind,
+              hit.line,
+              guardedBranch,
+              `edit to "${path}"`
+            ),
           };
         }
       }

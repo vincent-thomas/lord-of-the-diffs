@@ -15,6 +15,7 @@ import {
   isShellScript,
   isBranchSwitchLine,
   isGitCommitLine,
+  isGitInternalPath,
 } from "./logic.ts";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,12 @@ suite("isBranchSwitchLine — blocked", () => {
     "git switch develop",
     "sudo git checkout main",
     "sudo -n git switch develop",
+    // symbolic-ref — plumbing bypass of the branch guard
+    "git symbolic-ref HEAD refs/heads/main",
+    "git symbolic-ref HEAD refs/heads/feature/foo",
+    "git symbolic-ref HEAD",
+    "git symbolic-ref --short HEAD",
+    "sudo git symbolic-ref HEAD refs/heads/main",
   ];
   for (const c of cases) {
     test(JSON.stringify(c), () => assert.ok(isBranchSwitchLine(c)));
@@ -99,6 +106,21 @@ suite("findBranchSwitchInText — blocked", () => {
     const result = findBranchSwitchInText("  git checkout feature  ");
     assert.equal(result, "git checkout feature");
   });
+
+  test("symbolic-ref with branch argument", () =>
+    assert.ok(
+      findBranchSwitchInText("git symbolic-ref HEAD refs/heads/main") !== null
+    ));
+
+  test("symbolic-ref read-only form still blocked", () =>
+    assert.ok(findBranchSwitchInText("git symbolic-ref HEAD") !== null));
+
+  test("symbolic-ref inside compound command", () =>
+    assert.ok(
+      findBranchSwitchInText(
+        "git update-ref refs/heads/my-branch HEAD && git symbolic-ref HEAD refs/heads/my-branch"
+      ) !== null
+    ));
 });
 
 suite("findBranchSwitchInText — allowed", () => {
@@ -298,6 +320,48 @@ suite("isShellScript", () => {
 
   test("python shebang → not a shell script", () =>
     assert.ok(!isShellScript("script", "#!/usr/bin/env python3\nprint('hi')")));
+});
+
+// ---------------------------------------------------------------------------
+// isGitInternalPath
+// ---------------------------------------------------------------------------
+
+suite("isGitInternalPath — blocked (inside .git/)", () => {
+  const cases = [
+    ".git/HEAD",
+    ".git/config",
+    ".git/COMMIT_EDITMSG",
+    ".git/ORIG_HEAD",
+    ".git/MERGE_HEAD",
+    ".git/refs/heads/main",
+    ".git/hooks/pre-commit",
+    ".git/worktrees/my-wt/HEAD",
+    "/home/user/repo/.git/HEAD",
+    "/home/user/repo/.git/config",
+    "/home/user/repo/.git/hooks/pre-push",
+    "/home/user/repo/.git/worktrees/feature/HEAD",
+    "../../other-repo/.git/config",
+    "some/nested/path/.git/refs/heads/main",
+  ];
+  for (const c of cases) {
+    test(JSON.stringify(c), () => assert.ok(isGitInternalPath(c)));
+  }
+});
+
+suite("isGitInternalPath — allowed (outside .git/)", () => {
+  const cases = [
+    ".gitignore",
+    ".gitconfig",
+    ".github/workflows/ci.yml",
+    "my.git/config",            // not a bare .git component
+    "src/HEAD.rs",
+    "docs/HEAD.md",
+    "HEAD",                     // bare filename, no .git/ parent
+    "README.md",
+  ];
+  for (const c of cases) {
+    test(JSON.stringify(c), () => assert.ok(!isGitInternalPath(c)));
+  }
 });
 
 // ---------------------------------------------------------------------------

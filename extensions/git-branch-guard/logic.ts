@@ -35,6 +35,12 @@ export function currentBranch(cwd: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Classifies a blocked branch-switch line so callers can produce
+ * command-specific error messages.
+ */
+export type BranchSwitchKind = "checkout-switch" | "symbolic-ref";
+
+/**
  * Returns true if a single (already whitespace-normalised) command line
  * is a git branch-switching invocation.
  *
@@ -42,6 +48,7 @@ export function currentBranch(cwd: string): string | null {
  *   git checkout <branch>
  *   git checkout -b/-B <new>   (create + switch)
  *   git switch <anything>
+ *   git symbolic-ref <anything>  (plumbing bypass — rewrites .git/HEAD directly)
  *
  * Allowed (no branch change):
  *   git checkout -- <path>     (file restore)
@@ -49,18 +56,46 @@ export function currentBranch(cwd: string): string | null {
  *   git restore …
  */
 export function isBranchSwitchLine(line: string): boolean {
+  return branchSwitchKind(line) !== null;
+}
+
+/**
+ * Returns the kind of blocked branch-switch, or null if the line is allowed.
+ */
+export function branchSwitchKind(line: string): BranchSwitchKind | null {
   // git must be the actual command being invoked, not just a word that
   // appears somewhere in the line (e.g. inside an echo or comment).
   // Allow an optional leading "sudo [-flags]" prefix.
-  if (!/^\s*(?:sudo\s+(?:-[a-zA-Z]\S*\s+)*)?git\s/.test(line)) return false;
+  if (!/^\s*(?:sudo\s+(?:-[a-zA-Z]\S*\s+)*)?git\s/.test(line)) return null;
 
   if (/\bgit\s+checkout\b/.test(line)) {
-    if (/\bgit\s+checkout\s+--\s/.test(line)) return false; // file-restore
-    if (/\bgit\s+checkout\s+-p\b/.test(line)) return false; // patch mode
-    return true;
+    if (/\bgit\s+checkout\s+--\s/.test(line)) return null; // file-restore
+    if (/\bgit\s+checkout\s+-p\b/.test(line)) return null; // patch mode
+    return "checkout-switch";
   }
-  if (/\bgit\s+switch\b/.test(line)) return true;
-  return false;
+  if (/\bgit\s+switch\b/.test(line)) return "checkout-switch";
+  // Block all symbolic-ref invocations — this plumbing command rewrites
+  // .git/HEAD directly and is a complete bypass of the branch guard.
+  if (/\bgit\s+symbolic-ref\b/.test(line)) return "symbolic-ref";
+  return null;
+}
+
+/**
+ * Scans text for a blocked line and returns both the line and its kind,
+ * or null if clean.
+ */
+export function findBranchSwitchWithKind(
+  text: string
+): { line: string; kind: BranchSwitchKind } | null {
+  for (const rawLine of text.split("\n")) {
+    for (const raw of rawLine.split(/&&|\|\||;/)) {
+      const line = raw.replace(/\s+/g, " ").trim();
+      if (line.startsWith("#")) continue;
+      const kind = branchSwitchKind(line);
+      if (kind !== null) return { line, kind };
+    }
+  }
+  return null;
 }
 
 /**
@@ -72,14 +107,35 @@ export function isBranchSwitchLine(line: string): boolean {
  * segment, or null if clean.
  */
 export function findBranchSwitchInText(text: string): string | null {
-  for (const rawLine of text.split("\n")) {
-    for (const raw of rawLine.split(/&&|\|\||;/)) {
-      const line = raw.replace(/\s+/g, " ").trim();
-      if (line.startsWith("#")) continue; // ignore comments
-      if (isBranchSwitchLine(line)) return line;
-    }
-  }
-  return null;
+  return findBranchSwitchWithKind(text)?.line ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// .git/ internal path detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the given file path is inside a .git directory.
+ *
+ * Catches all of:
+ *   .git/HEAD                              (relative)
+ *   .git/config                            (config file)
+ *   .git/hooks/pre-commit                  (hook scripts)
+ *   .git/refs/heads/main                   (ref files)
+ *   /absolute/path/.git/COMMIT_EDITMSG     (absolute)
+ *   ../../other-repo/.git/config           (traversal)
+ *   .git/worktrees/<name>/HEAD             (worktree internals)
+ *
+ * Does NOT match:
+ *   .gitignore  .gitconfig  .github/…      (.git not a directory component)
+ *   my.git/config                          (my.git is not a bare .git component)
+ */
+export function isGitInternalPath(filePath: string): boolean {
+  // Normalise backslashes and collapse repeated separators.
+  const p = filePath.replace(/\\/g, "/").replace(/\/+/g, "/");
+  // Must have .git as a proper path component (preceded by / or start of string)
+  // followed by another / — meaning something is *inside* .git, not just .git itself.
+  return /(?:^|\/)\.git\//.test(p);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,10 +228,20 @@ export function findBranchSwitchInScript(
   scriptPath: string,
   cwd: string
 ): string | null {
+  return findBranchSwitchInScriptWithKind(scriptPath, cwd)?.line ?? null;
+}
+
+/**
+ * Like findBranchSwitchInScript but also returns the kind of the blocked line.
+ */
+export function findBranchSwitchInScriptWithKind(
+  scriptPath: string,
+  cwd: string
+): { line: string; kind: BranchSwitchKind } | null {
   try {
     const abs = resolve(cwd, scriptPath);
     const content = readFileSync(abs, "utf8");
-    return findBranchSwitchInText(content);
+    return findBranchSwitchWithKind(content);
   } catch {
     return null; // Unreadable → not our problem
   }
