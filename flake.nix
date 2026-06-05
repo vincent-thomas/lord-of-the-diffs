@@ -30,11 +30,11 @@
         # Store relative paths so all sibling files (e.g. ./logic.ts) remain
         # co-located under the same ${./extensions} Nix store path, keeping
         # relative imports intact at test-run time.
-        testRelPaths = map
-          (f: lib.removePrefix (toString ./extensions + "/") (toString f))
-          (lib.filter
-            (f: lib.hasSuffix ".test.ts" (builtins.baseNameOf (toString f)))
-            (lib.filesystem.listFilesRecursive ./extensions));
+        testRelPaths = map (f: lib.removePrefix (toString ./extensions + "/") (toString f)) (
+          lib.filter (f: lib.hasSuffix ".test.ts" (builtins.baseNameOf (toString f))) (
+            lib.filesystem.listFilesRecursive ./extensions
+          )
+        );
 
         pi = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -107,7 +107,7 @@
 
             # Build --extension / --skill flags for every bundled item.
             # pi accepts both file and directory paths for each flag.
-            extra_flags="--no-extensions --no-skills"
+            extra_flags=""
             for ext in "$out/share/pi/extensions"/*; do
               extra_flags="$extra_flags --extension $ext"
             done
