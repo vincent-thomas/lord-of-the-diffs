@@ -1,7 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { execSync } from "node:child_process";
 
 /**
  * Self-feedback extension.
@@ -10,13 +8,19 @@ import { dirname, join } from "node:path";
  * a follow-up user message is sent asking the agent to:
  *   1. Filter the findings — keep only those that improve general agent
  *      operation, not project/language-specific implementation details.
- *   2. Append the keepers to ~/.pi/agent/self-feedback.md as proactive checks:
- *      each entry states WHEN a check applies and WHAT to make sure of.
+ *   2. Open a PR to vincent-thomas/vt-pi updating self-feedback.md.
  *   3. Prune the file if it has grown redundant or long.
  *
- * On every subsequent session/turn the accumulated checks are injected
- * into the system prompt as things to actively think about while working.
+ * On every subsequent session/turn the current self-feedback.md from the
+ * repo's main branch is fetched via `gh api` and injected into the system
+ * prompt as things to actively think about while working.
  */
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const FEEDBACK_REPO = "vincent-thomas/vt-pi";
+const FEEDBACK_FILE = "self-feedback.md";
+const CLONE_DIR = "/tmp/vt-pi-self-feedback";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,18 +51,27 @@ function extractFindings(text: string): string[] {
     .filter((l) => /^[🔴🟡]/.test(l));
 }
 
-// Mirror pi's own getAgentDir() so the feedback file always lives next to
-// the rest of the user's pi config (~/.pi/agent/ by default).
-function getAgentDir(): string {
-  return process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
+/**
+ * Fetch the current self-feedback.md from the repo's main branch via `gh api`.
+ * Returns an empty string if the file doesn't exist yet or can't be reached.
+ */
+function fetchFeedbackFromGitHub(): string {
+  try {
+    const json = execSync(
+      `gh api repos/${FEEDBACK_REPO}/contents/${FEEDBACK_FILE}`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    );
+    const parsed = JSON.parse(json) as { content: string };
+    return Buffer.from(parsed.content, "base64").toString("utf-8").trim();
+  } catch {
+    return ""; // File doesn't exist yet, or no network / gh auth
+  }
 }
 
-function feedbackFilePath(): string {
-  return join(getAgentDir(), "self-feedback.md");
-}
-
-function buildTaskMessage(findings: string[], feedbackFile: string): string {
+function buildTaskMessage(findings: string[]): string {
   const findingLines = findings.map((f) => `- ${f}`).join("\n");
+  const today = new Date().toISOString().slice(0, 10);
+  const branch = `self-feedback/${today}`;
 
   return (
     `Patch-review findings were just detected. Please do the following:\n\n` +
@@ -74,24 +87,36 @@ function buildTaskMessage(findings: string[], feedbackFile: string): string {
     `If it cannot be abstracted without losing its meaning, discard it.\n\n` +
     `Discard anything that is project-specific, domain-specific, language-specific, ` +
     `or already covered by this project's AGENTS.md / CLAUDE.md.\n\n` +
-    `2. **Append**: Add the findings worth keeping to \`${feedbackFile}\`. ` +
-    `**Never overwrite the file** — always append new content at the end of existing content. ` +
-    `If the file does not exist yet, create it with only the new entries. ` +
-    `If it already exists, use the \`edit\` tool to insert the new block at the end — ` +
-    `do NOT use the \`write\` tool on an existing file, as that would erase prior entries.\n\n` +
-    `Each entry must be a single line combining two parts: the scenario in which the check applies, ` +
-    `and what to make sure of. ` +
-    `Write it as a forward-looking reminder, not a description of what went wrong. ` +
+    `2. **Open a PR** to \`${FEEDBACK_REPO}\` with the findings worth keeping:\n\n` +
+    `   a. Clone (or refresh) the repo:\n` +
+    `      \`\`\`\n` +
+    `      rm -rf ${CLONE_DIR} && gh repo clone ${FEEDBACK_REPO} ${CLONE_DIR}\n` +
+    `      \`\`\`\n\n` +
+    `   b. Create a branch and update the file:\n` +
+    `      \`\`\`\n` +
+    `      cd ${CLONE_DIR}\n` +
+    `      git checkout -b ${branch}\n` +
+    `      \`\`\`\n` +
+    `      Append the curated findings to \`${FEEDBACK_FILE}\` ` +
+    `(create the file if it does not exist yet; **never overwrite** existing content — ` +
+    `use the \`edit\` tool if the file exists). ` +
     `Use this format:\n` +
-    `   \`\`\`\n` +
-    `   ### YYYY-MM-DD\n` +
-    `   - 🔴 **When** [scenario]: make sure [what to verify or think about].\n` +
-    `   - 🟡 **When** [scenario]: make sure [what to verify or think about].\n` +
-    `   \`\`\`\n\n` +
-    `3. **Prune if necessary**: After appending, re-read the full file. ` +
-    `If it has grown redundant or large (more than ~15 entries total), ` +
+    `      \`\`\`\n` +
+    `      ### ${today}\n` +
+    `      - 🔴 **When** [scenario]: make sure [what to verify or think about].\n` +
+    `      - 🟡 **When** [scenario]: make sure [what to verify or think about].\n` +
+    `      \`\`\`\n\n` +
+    `   c. **Prune if necessary**: If the file now exceeds ~15 entries total, ` +
     `rewrite it keeping only the highest-quality, most general findings — ` +
     `merge near-duplicates and drop weak ones.\n\n` +
+    `   d. Commit, push, and open the PR:\n` +
+    `      \`\`\`\n` +
+    `      cd ${CLONE_DIR}\n` +
+    `      git add ${FEEDBACK_FILE}\n` +
+    `      git commit -m "self-feedback: ${today}"\n` +
+    `      git push -u origin ${branch}\n` +
+    `      gh pr create --title "self-feedback: ${today}" --body "Curated from patch-review findings." --repo ${FEEDBACK_REPO}\n` +
+    `      \`\`\`\n\n` +
     `Detected findings:\n${findingLines}`
   );
 }
@@ -102,11 +127,21 @@ export default function (pi: ExtensionAPI) {
   // Guard: skip the agent_end that fires for our own task message.
   let awaitingFeedbackRun = false;
 
+  // Cache the fetched feedback for the lifetime of the session so we don't
+  // hit the GitHub API on every agent turn.
+  let sessionFeedback: string | null = null;
+
+  function getFeedback(): string {
+    if (sessionFeedback === null) {
+      sessionFeedback = fetchFeedbackFromGitHub();
+    }
+    return sessionFeedback;
+  }
+
   // ── 1. Notify on session start if feedback exists ──────────────────────────
   pi.on("session_start", async (_event, ctx) => {
-    const feedbackFile = feedbackFilePath();
-    if (!existsSync(feedbackFile)) return;
-    const content = readFileSync(feedbackFile, "utf-8").trim();
+    sessionFeedback = null; // Re-fetch at the start of each session.
+    const content = getFeedback();
     if (content) {
       ctx.ui.notify("📋 Self-feedback from past patch reviews is active.", "info");
     }
@@ -114,9 +149,7 @@ export default function (pi: ExtensionAPI) {
 
   // ── 2. Inject feedback into every agent turn's system prompt ───────────────
   pi.on("before_agent_start", async (event, _ctx) => {
-    const feedbackFile = feedbackFilePath();
-    if (!existsSync(feedbackFile)) return;
-    const content = readFileSync(feedbackFile, "utf-8").trim();
+    const content = getFeedback();
     if (!content) return;
 
     return {
@@ -132,7 +165,7 @@ export default function (pi: ExtensionAPI) {
     };
   });
 
-  // ── 3. Detect findings and delegate curation to the agent ─────────────────
+  // ── 3. Detect findings and delegate curation + PR to the agent ─────────────
   pi.on("agent_end", async (event, _ctx) => {
     // Skip the run that was triggered by our own task message.
     if (awaitingFeedbackRun) {
@@ -144,12 +177,7 @@ export default function (pi: ExtensionAPI) {
     const findings = extractFindings(text);
     if (findings.length === 0) return;
 
-    const feedbackFile = feedbackFilePath();
-    // Ensure the agent dir exists so the agent can write without creating it.
-    const dir = dirname(feedbackFile);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
     awaitingFeedbackRun = true;
-    pi.sendUserMessage(buildTaskMessage(findings, feedbackFile));
+    pi.sendUserMessage(buildTaskMessage(findings));
   });
 }
