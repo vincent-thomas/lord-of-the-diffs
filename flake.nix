@@ -36,6 +36,14 @@
           )
         );
 
+        # Bundle extensions + lib into one store path so ../lib/ imports work.
+        # lib/ has no index.ts so pi won't auto-discover it as an extension.
+        extensionsWithLib = pkgs.runCommand "extensions-with-lib" { } ''
+          mkdir -p $out/extensions $out/lib
+          cp -r ${./extensions}/. $out/extensions/
+          cp -r ${./lib}/. $out/lib/
+        '';
+
         pi = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
           version = "0.78.0";
@@ -74,7 +82,7 @@
             runHook preCheck
             ${lib.concatMapStrings (rel: ''
               echo "running ${rel}"
-              ${nodejs}/bin/node ${./extensions}/${rel}
+              ${nodejs}/bin/node ${extensionsWithLib}/extensions/${rel}
             '') testRelPaths}
             runHook postCheck
           '';
@@ -98,9 +106,11 @@
             # no dangling symlinks and needs no manual fixup.
             cp -rL node_modules "$out_pkg/"
 
-            # Bundle personal extensions and skills from the flake repo.
-            mkdir -p "$out/share/pi/extensions"
-            cp -r ${./extensions}/. "$out/share/pi/extensions/"
+            # Bundle personal extensions + shared lib from the flake repo.
+            # lib/ sits next to extensions/ so ../lib/ imports resolve.
+            mkdir -p "$out/share/pi"
+            cp -r ${extensionsWithLib}/extensions "$out/share/pi/extensions"
+            cp -r ${extensionsWithLib}/lib "$out/share/pi/lib"
 
             mkdir -p "$out/share/pi/skills"
             cp -r ${./skills}/. "$out/share/pi/skills/"
@@ -122,7 +132,7 @@
             runHook postInstall
           '';
 
-          nativeBuildInputs = [ pkgs.makeWrapper ];
+          nativeBuildInputs = [ pkgs.makeWrapper pkgs.git ];
 
           meta = with pkgs.lib; {
             description = "Coding agent CLI with read, bash, edit, write tools and session management";
