@@ -108,3 +108,8 @@ export function findCommandUse(
 export function isPythonCommand(cmd: string): boolean {
 	return /^python(?:\d+(?:\.\d+)?)?$/.test(cmd);
 }
+
+/** Matches `perl`, `perl5`, `perl5.38`, etc. */
+export function isPerlCommand(cmd: string): boolean {
+	return /^perl(?:\d+(?:\.\d+)?)?$/.test(cmd);
+}

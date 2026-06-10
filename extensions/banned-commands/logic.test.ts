@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { leadingCommand, findCommandUse, BANNED_NAMES } from "./logic.ts";
-import { isPythonCommand } from "../../lib/command-utils.ts";
+import { isPerlCommand, isPythonCommand } from "../../lib/command-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Tiny test harness
@@ -119,6 +119,42 @@ const pythonAllowed = [
 for (const cmd of pythonAllowed) {
 	test(`allows: ${cmd}`, () => {
 		assert.equal(findCommandUse(cmd, isPythonCommand), null);
+	});
+}
+
+// ---------------------------------------------------------------------------
+// findCommandUse — perl detection
+// ---------------------------------------------------------------------------
+
+suite("findCommandUse — perl");
+
+const perlBlocked = [
+	"perl -e 'print 1'",
+	"perl5 script.pl",
+	"env perl -e 'x'",
+	"perl <<EOF",
+	"perl5.38 thing.pl",
+	"PERL5LIB=. perl run.pl",
+	"/usr/bin/perl old.pl",
+	"ls && perl build.pl",
+];
+
+for (const cmd of perlBlocked) {
+	test(`blocks: ${cmd}`, () => {
+		assert.ok(findCommandUse(cmd, isPerlCommand), `expected a hit for ${cmd}`);
+	});
+}
+
+const perlAllowed = [
+	"myperl run", // different command
+	"echo perl", // argument, not command
+	"perlbrew list", // different command
+	"which perl", // inspecting, not executing
+];
+
+for (const cmd of perlAllowed) {
+	test(`allows: ${cmd}`, () => {
+		assert.equal(findCommandUse(cmd, isPerlCommand), null);
 	});
 }
 
