@@ -24,13 +24,13 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
-        # Enumerate *.test.ts files inside extensions/ at Nix evaluation time.
+        # Enumerate *.test.ts files inside pi/extensions/ at Nix evaluation time.
         # Store relative paths so all sibling files (e.g. ./logic.ts) remain
-        # co-located under the same ${./extensions} Nix store path, keeping
+        # co-located under the same ${./pi/extensions} Nix store path, keeping
         # relative imports intact at test-run time.
-        testRelPaths = map (f: lib.removePrefix (toString ./extensions + "/") (toString f)) (
+        testRelPaths = map (f: lib.removePrefix (toString ./pi/extensions + "/") (toString f)) (
           lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-            lib.filesystem.listFilesRecursive ./extensions
+            lib.filesystem.listFilesRecursive ./pi/extensions
           )
         );
 
@@ -38,8 +38,8 @@
         # lib/ has no index.ts so pi won't auto-discover it as an extension.
         extensionsWithLib = pkgs.runCommand "extensions-with-lib" { } ''
           mkdir -p $out/extensions $out/lib
-          cp -r ${./extensions}/. $out/extensions/
-          cp -r ${./lib}/. $out/lib/
+          cp -r ${./pi/extensions}/. $out/extensions/
+          cp -r ${./pi/lib}/. $out/lib/
         '';
 
         pi = pkgs.buildNpmPackage {
@@ -111,10 +111,10 @@
             cp -r ${extensionsWithLib}/lib "$out/share/pi/lib"
 
             mkdir -p "$out/share/pi/skills"
-            cp -r ${./skills}/. "$out/share/pi/skills/"
+            cp -r ${./pi/skills}/. "$out/share/pi/skills/"
 
             # Bundle AGENTS.md with core principles
-            cp ${./AGENTS.md} "$out/share/pi/AGENTS.md"
+            cp ${./pi/AGENTS.md} "$out/share/pi/AGENTS.md"
 
             # Build --extension / --skill flags for every bundled item.
             # pi accepts both file and directory paths for each flag.
