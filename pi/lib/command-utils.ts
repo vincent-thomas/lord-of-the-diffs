@@ -113,3 +113,8 @@ export function isPythonCommand(cmd: string): boolean {
 export function isPerlCommand(cmd: string): boolean {
 	return /^perl(?:\d+(?:\.\d+)?)?$/.test(cmd);
 }
+
+/** Matches `awk`, `gawk`, `mawk`, `nawk`, etc. */
+export function isAwkCommand(cmd: string): boolean {
+	return /^(?:g|m|n)?awk$/.test(cmd);
+}
