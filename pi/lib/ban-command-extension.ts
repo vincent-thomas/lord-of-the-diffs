@@ -21,27 +21,35 @@ export interface BanCommandConfig {
 }
 
 /**
- * Create an extension that blocks execution of a specific command.
+ * Create an extension that blocks execution of one or more commands.
  */
-export function createBanCommandExtension(config: BanCommandConfig) {
+export function createBanCommandExtension(
+	configs: BanCommandConfig | BanCommandConfig[],
+) {
+	const configArray = Array.isArray(configs) ? configs : [configs];
+
 	return function (pi: ExtensionAPI) {
 		pi.on("tool_call", async (event, ctx) => {
 			if (!isToolCallEventType("bash", event)) return;
 
 			const command = event.input.command ?? "";
-			const hit = findCommandUse(command, config.matcher);
-			if (!hit) return;
 
-			if (ctx.hasUI) {
-				ctx.ui.notify(`${config.emoji} Blocked ${config.name} execution.`, "warning");
+			// Check each configured command ban
+			for (const config of configArray) {
+				const hit = findCommandUse(command, config.matcher);
+				if (!hit) continue;
+
+				if (ctx.hasUI) {
+					ctx.ui.notify(`${config.emoji} Blocked ${config.name} execution.`, "warning");
+				}
+
+				return {
+					block: true,
+					reason:
+						`${config.name} execution is not allowed (blocked: \`${hit.segment}\`). ` +
+						config.reason,
+				};
 			}
-
-			return {
-				block: true,
-				reason:
-					`${config.name} execution is not allowed (blocked: \`${hit.segment}\`). ` +
-					config.reason,
-			};
 		});
 	};
 }
