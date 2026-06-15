@@ -113,6 +113,9 @@
             mkdir -p "$out/share/pi/skills"
             cp -r ${./skills}/. "$out/share/pi/skills/"
 
+            # Bundle AGENTS.md with core principles
+            cp ${./AGENTS.md} "$out/share/pi/AGENTS.md"
+
             # Build --extension / --skill flags for every bundled item.
             # pi accepts both file and directory paths for each flag.
             extra_flags=""
@@ -125,7 +128,7 @@
 
             mkdir -p "$out/bin"
             makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$out_pkg/dist/cli.js $extra_flags"
+              --add-flags "$out_pkg/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
 
             runHook postInstall
           '';
