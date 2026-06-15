@@ -24,25 +24,8 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
-        # Enumerate *.test.ts files inside pi/extensions/ at Nix evaluation time.
-        # Store relative paths so all sibling files (e.g. ./logic.ts) remain
-        # co-located under the same ${./pi/extensions} Nix store path, keeping
-        # relative imports intact at test-run time.
-        testRelPaths = map (f: lib.removePrefix (toString ./pi/extensions + "/") (toString f)) (
-          lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-            lib.filesystem.listFilesRecursive ./pi/extensions
-          )
-        );
-
-        # Bundle extensions + lib into one store path so ../lib/ imports work.
-        # lib/ has no index.ts so pi won't auto-discover it as an extension.
-        extensionsWithLib = pkgs.runCommand "extensions-with-lib" { } ''
-          mkdir -p $out/extensions $out/lib
-          cp -r ${./pi/extensions}/. $out/extensions/
-          cp -r ${./pi/lib}/. $out/lib/
-        '';
-
-        pi = pkgs.buildNpmPackage {
+        # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
+        piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
           version = "0.79.0";
 
@@ -76,15 +59,7 @@
             runHook postBuild
           '';
 
-          checkPhase = ''
-            runHook preCheck
-            ${lib.concatMapStrings (rel: ''
-              echo "running ${rel}"
-              ${nodejs}/bin/node ${extensionsWithLib}/extensions/${rel}
-            '') testRelPaths}
-            runHook postCheck
-          '';
-          doCheck = true;
+          doCheck = false; # Tests run in piCustomizations derivation
 
           installPhase = ''
             runHook preInstall
@@ -104,35 +79,10 @@
             # no dangling symlinks and needs no manual fixup.
             cp -rL node_modules "$out_pkg/"
 
-            # Bundle personal extensions + shared lib from the flake repo.
-            # lib/ sits next to extensions/ so ../lib/ imports resolve.
-            mkdir -p "$out/share/pi"
-            cp -r ${extensionsWithLib}/extensions "$out/share/pi/extensions"
-            cp -r ${extensionsWithLib}/lib "$out/share/pi/lib"
-
-            mkdir -p "$out/share/pi/skills"
-            cp -r ${./pi/skills}/. "$out/share/pi/skills/"
-
-            # Bundle AGENTS.md with core principles
-            cp ${./pi/AGENTS.md} "$out/share/pi/AGENTS.md"
-
-            # Build --extension / --skill flags for every bundled item.
-            # pi accepts both file and directory paths for each flag.
-            # Skip test files (*.test.ts) - they're for build-time validation only.
-            extra_flags=""
-            for ext in "$out/share/pi/extensions"/*; do
-              case "$(basename "$ext")" in
-                *.test.ts) ;; # Skip test files
-                *) extra_flags="$extra_flags --extension $ext" ;;
-              esac
-            done
-            for skill in "$out/share/pi/skills"/*; do
-              extra_flags="$extra_flags --skill $skill"
-            done
-
+            # Create a simple wrapper (no customizations yet)
             mkdir -p "$out/bin"
             makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$out_pkg/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+              --add-flags "$out_pkg/dist/cli.js"
 
             runHook postInstall
           '';
@@ -143,18 +93,85 @@
           ];
 
           meta = with pkgs.lib; {
-            description = "Coding agent CLI with read, bash, edit, write tools and session management";
+            description = "Base Pi coding agent package (upstream, no customizations)";
             homepage = "https://github.com/badlogic/pi-mono";
             license = licenses.mit;
             mainProgram = "pi";
             platforms = platforms.unix;
           };
         };
+
+        # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
+        piCustomizations = pkgs.runCommand "pi-customizations" {
+          nativeBuildInputs = [ nodejs pkgs.git ];
+        } ''
+          mkdir -p $out/extensions $out/lib $out/skills
+
+          # Copy extensions + lib so ../lib/ imports work
+          cp -r ${./pi/extensions}/. $out/extensions/
+          cp -r ${./pi/lib}/. $out/lib/
+
+          # Copy skills and AGENTS.md
+          cp -r ${./pi/skills}/. $out/skills/
+          cp ${./pi/AGENTS.md} $out/AGENTS.md
+
+          # Run tests on extensions
+          ${lib.concatMapStrings (testFile: ''
+            echo "Running test: ${testFile}"
+            ${nodejs}/bin/node $out/extensions/${testFile}
+          '') (map (f: lib.removePrefix (toString ./pi/extensions + "/") (toString f)) (
+            lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
+              lib.filesystem.listFilesRecursive ./pi/extensions
+            )
+          ))}
+        '';
+
+        # ── 3. Final Pi package (base + customizations) ───────────────────────
+        pi = pkgs.runCommand "pi-with-customizations" {
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          passthru = {
+            inherit piBase piCustomizations;
+          };
+          meta = piBase.meta // {
+            description = "Pi coding agent with custom extensions and configuration";
+          };
+        } ''
+          # Copy the base pi package
+          cp -r ${piBase} $out
+          chmod -R u+w $out
+
+          # Add customizations to share/pi/
+          mkdir -p $out/share/pi
+          cp -r ${piCustomizations}/extensions $out/share/pi/extensions
+          cp -r ${piCustomizations}/lib $out/share/pi/lib
+          cp -r ${piCustomizations}/skills $out/share/pi/skills
+          cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+
+          # Build --extension / --skill flags for every bundled item.
+          # Skip test files (*.test.ts) - they're for build-time validation only.
+          extra_flags=""
+          for ext in $out/share/pi/extensions/*; do
+            case "$(basename "$ext")" in
+              *.test.ts) ;; # Skip test files
+              *) extra_flags="$extra_flags --extension $ext" ;;
+            esac
+          done
+          for skill in $out/share/pi/skills/*; do
+            extra_flags="$extra_flags --skill $skill"
+          done
+
+          # Replace the wrapper with one that includes customizations
+          rm $out/bin/pi
+          makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
+            --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+        '';
       in
       {
         packages = {
           default = pi;
           pi = pi;
+          piBase = piBase;
+          piCustomizations = piCustomizations;
         };
 
         apps.default = {
