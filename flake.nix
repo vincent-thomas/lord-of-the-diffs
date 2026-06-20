@@ -27,13 +27,13 @@
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
-          version = "0.79.0";
+          version = "0.79.8";
 
           src = pi-mono;
 
           # Hash covers all npm deps declared in the root package-lock.json.
           # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
-          npmDepsHash = "sha256-H+F/qzXilTXDHneKT3vms0MHi/E7+ahGh6zupFtMptU=";
+          npmDepsHash = "sha256-xrTpu4TkRmlflg7pMaw/QVsN+poQ41slVA5PET+NDoI=";
 
           inherit nodejs;
 
