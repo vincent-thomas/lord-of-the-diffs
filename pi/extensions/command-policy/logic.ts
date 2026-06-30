@@ -71,7 +71,8 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	{ name: "cp", status: CommandPolicyStatus.Allowed, command: "cp", bannedFlags: ["-r", "-R", "--recursive"] },
 	{ name: "mv", status: CommandPolicyStatus.Allowed, command: "mv" },
 	{ name: "chmod", status: CommandPolicyStatus.Allowed, command: "chmod", bannedFlags: ["-R", "--recursive"] },
-	{ name: "nix", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: ["flake check", "build"] },
+	{ name: "nix build", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: ["build"] },
+	{ name: "nix flake", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: ["flake"] },
 	{
 		name: "git status",
 		status: CommandPolicyStatus.Allowed,

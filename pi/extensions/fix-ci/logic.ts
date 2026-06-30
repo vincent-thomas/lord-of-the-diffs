@@ -762,6 +762,62 @@ export async function detectPrConflictsLocally(
 }
 
 // ---------------------------------------------------------------------------
+// Remote-ahead detection & pull
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if the remote tracking branch has commits ahead of the local branch.
+ * Fetches first to ensure refs are up to date.
+ */
+export async function isRemoteAhead(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	try {
+		const branch = currentBranch(cwd);
+		if (!branch) return false;
+
+		// Fetch the latest remote refs for this branch
+		await execAsync(`git fetch origin ${branch} 2>&1`, {
+			cwd,
+			timeout: 30_000,
+			signal,
+		});
+
+		const { stdout } = await execAsync(
+			`git rev-list --count HEAD..origin/${branch} 2>/dev/null`,
+			{ cwd, timeout: 10_000, signal },
+		);
+		const count = parseInt(stdout.trim(), 10);
+		return !isNaN(count) && count > 0;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Pull remote changes into the local branch using merge (not rebase).
+ * Uses --no-edit so the merge commit message is auto-generated.
+ * Returns { success, output, conflictPaths }.
+ */
+export async function pullRemoteChanges(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<{ success: boolean; output: string; conflictPaths: string[] }> {
+	try {
+		const { stdout, stderr } = await execAsync(
+			"git pull --no-rebase --no-edit 2>&1",
+			{ cwd, timeout: 30_000, signal },
+		);
+		return { success: true, output: stdout + stderr, conflictPaths: [] };
+	} catch (err: unknown) {
+		const output = extractErrorOutput(err);
+		const conflictPaths = extractConflictPaths(output);
+		return { success: false, output, conflictPaths };
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

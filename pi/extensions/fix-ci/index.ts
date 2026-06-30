@@ -188,6 +188,76 @@ export default function (pi: ExtensionAPI) {
 				cycleCount++;
 				const cycle = cycleCount;
 
+				// ── Pull remote changes if remote is ahead ───────────────────
+				onUpdate?.({
+					content: [
+						{ type: "text", text: "Checking if remote has newer commits…" },
+					],
+				});
+
+				const remoteAhead = await isRemoteAhead(cwd, signal);
+
+				if (remoteAhead) {
+					onUpdate?.(
+						{
+							content: [
+								{
+									type: "text",
+									text:
+										`Remote branch has commits ahead of local — ` +
+										`pulling changes via merge (non-history-rewriting)…`,
+								},
+							],
+						},
+					);
+
+					const pullResult = await pullRemoteChanges(cwd, signal);
+
+					if (!pullResult.success) {
+						const conflictList =
+							pullResult.conflictPaths.length > 0
+								? pullResult.conflictPaths.map((p) => `- \`${p}\``).join("\n")
+								: "Check the pull output below for conflicting files.";
+
+						cycleCount = 0;
+						return {
+							content: [
+								{
+									type: "text",
+									text:
+										`## ⚠️ Merge Conflicts During Pull\n\n` +
+										`The remote branch has commits ahead of local. ` +
+										`I attempted to pull them via merge but there are unresolved ` +
+										`conflicts.\n\n` +
+										`### Conflicting files:\n${conflictList}\n\n` +
+										`### Pull output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
+										`### To resolve:\n` +
+										`1. Resolve the conflicts in the listed files\n` +
+										`2. \`git add\` the resolved files\n` +
+										`3. Commit the merge\n` +
+										`4. Run \`push_and_check_ci\` again`,
+								},
+							],
+							details: {
+								mergeConflict: true,
+								conflictPaths: pullResult.conflictPaths,
+								pullOutput: pullResult.output,
+							},
+						};
+					}
+
+					onUpdate?.(
+						{
+							content: [
+								{
+									type: "text",
+									text: "Pull succeeded. Proceeding with push…",
+								},
+							],
+						},
+					);
+				}
+
 				// Push
 				onUpdate?.({
 					content: [{ type: "text", text: "Pushing to origin…" }],
