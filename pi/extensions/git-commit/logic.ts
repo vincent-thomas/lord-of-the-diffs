@@ -71,7 +71,8 @@ export async function gitCommit(
 		// Exit 0 means no staged changes.
 		return {
 			success: false,
-			output: "Nothing to commit — no staged changes. Stage files with `git add` first.",
+			output: "Nothing to commit — no staged changes. " +
+				"Use `add_all: true` to auto-stage, or `git add` individual files.",
 		};
 	} catch {
 		// Exit 1 means there ARE staged changes — proceed.

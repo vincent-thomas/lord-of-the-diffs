@@ -68,6 +68,32 @@ export async function gitPush(cwd: string, signal?: AbortSignal): Promise<PushRe
 }
 
 // ---------------------------------------------------------------------------
+// Dirty working tree check
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if the working tree has uncommitted changes (modified, unstaged, or
+ * untracked files). Returns true if dirty, false if clean.
+ */
+export async function hasDirtyWorkingTree(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	try {
+		// `git status --porcelain` returns empty output when the tree is clean.
+		const { stdout } = await execAsync("git status --porcelain", {
+			cwd,
+			timeout: 10_000,
+			signal,
+		});
+		return stdout.trim().length > 0;
+	} catch {
+		// If git fails, err on the side of caution — assume dirty.
+		return true;
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Check mode detection
 // ---------------------------------------------------------------------------
 

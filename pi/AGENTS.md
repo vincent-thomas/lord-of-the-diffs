@@ -49,7 +49,9 @@ When a tool call fails, treat the error as debugging input:
 
 ---
 
-## Git history — make history tell a story
+## Commit rhythm — checkpoint every valid state
+
+**Every commit must represent a valid, coherent state at a point in time.** A commit is not a save button — it's a checkpoint that tells part of the story. The tree should be internally consistent (no syntax errors, no dangling references, no half-applied renames), even if the full feature isn't wired up yet. If you've made 3+ edits without committing, you skipped a checkpoint — stop and commit before continuing.
 
 - **Break big tasks into small, independent commits.** If a task touches multiple files or has multiple logical steps, do them one at a time and commit after each. Each commit must be valid on its own — no dangling references, no half-finished abstractions, no commented-out code that a future commit will uncomment.
   - Good sequence for "Add a new config option":
@@ -63,6 +65,8 @@ When a tool call fails, treat the error as debugging input:
 - **Order commits logically:** refactoring/prep first, new abstractions next, usage changes last. Each commit should leave the tree in a valid (or acceptable intermediate state) and never depend on future commits to compile or pass checks.
 - **Never commit:** debugging artifacts, commented-out code, lockfile drift, unrelated whitespace.
 - **Use the tools (`git_commit`, `push_and_check_ci`), not raw bash.** They enforce the rules above and block dangerous operations.
+  - `git_commit { message: "...", add_all: true }` — stages everything and commits in one step. Use this for quick checkpoints where all changes belong together.
+  - `git_commit { message: "...", add_all: false }` — commits only pre-staged changes (for selective commits).
 - **Branch hygiene:** short-lived, focused branches. Never commit on `main`/`master`.
 
 ---

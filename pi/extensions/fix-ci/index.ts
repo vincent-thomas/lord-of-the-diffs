@@ -15,6 +15,7 @@ import {
 	gitPush,
 	getHeadSha,
 	hasUnpushedCommits,
+	hasDirtyWorkingTree,
 	pollChecks,
 	fetchFailureLogs,
 	isFailure,
@@ -51,7 +52,30 @@ export default function (pi: ExtensionAPI) {
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const cwd = ctx.cwd;
 
-			// ── 0. Check for PR merge conflicts ────────────────────────────
+			// ── 0. Reject if working tree is dirty ─────────────────────────
+			onUpdate?.({
+				content: [{ type: "text", text: "Checking for uncommitted changes…" }],
+			});
+
+			if (await hasDirtyWorkingTree(cwd, signal)) {
+				return {
+					content: [
+						{
+							type: "text",
+							text:
+								`## ⚠️ Working Tree Has Uncommitted Changes\n\n` +
+								`The working tree is dirty — there are unstaged, uncommitted changes.\n\n` +
+								`Commit them first before pushing. A push should represent a clear, ` +
+								`verifiable checkpoint.\n\n` +
+								`Run \`git status\` to see what's pending, then stage and commit. ` +
+								`After committing, call \`push_and_check_ci\` again.`,
+						},
+					],
+					details: { dirtyWorkingTree: true },
+				};
+			}
+
+			// ── 1. Check for PR merge conflicts ────────────────────────────
 			// If the PR has conflicts against its base branch, we try to merge
 			// the latest base branch into the PR branch before pushing.
 			const mergeableStatus = await getPrMergeableStatus(cwd, signal);

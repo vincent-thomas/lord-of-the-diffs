@@ -64,7 +64,7 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	{ name: "cp", status: CommandPolicyStatus.Allowed, command: "cp", bannedFlags: ["-r", "-R", "--recursive"] },
 	{ name: "mv", status: CommandPolicyStatus.Allowed, command: "mv" },
 	{ name: "chmod", status: CommandPolicyStatus.Allowed, command: "chmod", bannedFlags: ["-R", "--recursive"] },
-	{ name: "nix", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: [["build"], ["flake", "check"]] },
+	{ name: "nix", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: [["build"], ["flake", "check"], ["log"]] },
 	{
 		name: "git config",
 		status: CommandPolicyStatus.Banned,
@@ -89,7 +89,8 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
     ["restore"],
     ["rev-parse"],
     ["merge-base"],
-    ["commit"]
+    ["commit"],
+    ["rm"]
   ] },
 	{
 		name: "git checkout",
