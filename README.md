@@ -5,19 +5,27 @@ that prioritises **directed competence over raw capability**. The goal isn't to
 make the agent as powerful as possible — it's to make invalid states
 unrepresentable so the agent produces useful, correct output efficiently.
 
+## How to install/run
+(nix is required)
+
+```bash
+$ nix profile install github:vincent-thomas/vt-pi
+$ pi
+```
+
 ## Philosophy
 
-The harness is built around a simple premise: **the agent is competent but
-unreliable.** Given enough freedom, it will eventually do something careless.
-The constraints aren't there to limit intelligence — they're there to catch the
-10% of cases where the agent would take a sloppy path.
+The harness is built around a simple premise: **the agent prioritises correct workflow over max intelligence by harness constraints.**
+The constraints aren't there to limit intelligence — they're there to allow autonomy by always moving forwards, slowly.
+
+> Slow and steady wins the race.
 
 Three design principles:
 
 - **Block the wrong path, provide the right one.** Instead of telling the agent
   "don't push directly," the harness provides `push_and_check_ci` which pushes
   and polls CI. Instead of banning `git commit`, it provides `git_commit` with
-  pre-checks. The dangerous path is structurally unavailable.
+  pre-checks. The dangerous path is structurally unavailable. __Make invalid state unrepresentable__.
 
 - **The project defines "valid."** The harness doesn't guess what checks to run
   based on marker files. The `Makefile` defines what "valid" means — the
