@@ -79,11 +79,17 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 		subcommand: [["status"]],
 		allowedFlags: ["--short", "--porcelain", "-s"],
 	},
+	{
+		name: "git branch",
+		status: CommandPolicyStatus.Banned,
+		command: "git",
+		subcommand: [["branch"]],
+		description: "Use the git_commit or push_and_check_ci tools for branch management.",
+	},
 	{ name: "git", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [
     ["diff"],
     ["log"],
     ["show"],
-    ["branch"],
     ["ls-files"],
     ["add"],
     ["restore"],

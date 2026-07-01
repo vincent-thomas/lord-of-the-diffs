@@ -356,16 +356,18 @@ test("allows commands by exact command", () => {
 
 test("allows git on a subcommand basis", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
-		["diff"], ["log"], ["show"], ["branch"],
+		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
 		["rev-parse"], ["merge-base"], ["commit"], ["rm"],
 	]);
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
+	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
 });
 
 test("can explicitly ban entries with model guidance", () => {
 	assert.equal(findEntry("git config")?.status, CommandPolicyStatus.Banned);
 	assert.match(findEntry("git config")?.description ?? "", /Do not inspect or modify Git configuration/);
+	assert.equal(findEntry("git branch")?.status, CommandPolicyStatus.Banned);
 	assert.equal(findEntry("grep")?.status, CommandPolicyStatus.Banned);
 	assert.match(findEntry("grep")?.description ?? "", /Use rg/);
 });
