@@ -3,7 +3,7 @@
 This is a [Pi coding agent](https://github.com/earendil-works/pi) configuration
 that prioritises **directed competence over raw capability**. The goal isn't to
 make the agent as powerful as possible — it's to make invalid states
-unrepresentable so the agent produces useful, correct output efficiently.
+unrepresentable so the agent produces useful, correct output in fewer turns.
 
 ## How to install/run
 (nix is required)
@@ -15,8 +15,8 @@ $ pi
 
 ## Philosophy
 
-The harness is built around a simple premise: **the agent prioritises correct workflow over max intelligence by harness constraints.**
-The constraints aren't there to limit intelligence — they're there to allow autonomy by always moving forwards, slowly.
+The harness is built around a simple premise: **the agent prioritises correct workflow over raw intelligence by constraining the wrong paths.**
+The constraints aren't there to limit capability — they're there to channel autonomy by always moving forward, methodically.
 
 > Slow and steady wins the race.
 
@@ -25,11 +25,12 @@ Three design principles:
 - **Block the wrong path, provide the right one.** Instead of telling the agent
   "don't push directly," the harness provides `push_and_check_ci` which pushes
   and polls CI. Instead of banning `git commit`, it provides `git_commit` with
-  pre-checks. The dangerous path is structurally unavailable. __Make invalid state unrepresentable__.
+  pre-checks. The dangerous path is structurally unavailable. *Make invalid
+  state unrepresentable.*
 
 - **The project defines "valid."** The harness doesn't guess what checks to run
   based on marker files. The `Makefile` defines what "valid" means — the
-  harness just runs `make`. The project is in control.
+  harness just runs `make`. The project stays in control.
 
 - **Commit rhythm over save-button mentality.** Every commit must represent a
   valid, coherent state at a point in time. The tools enforce this: the working
@@ -97,15 +98,16 @@ read-only commands.
 
 ### Pre-check system (`pi/lib/precheck.ts`)
 
-Runs `make` before every commit if a `Makefile` exists and `make` is
-available. The project defines what "valid" means through its Makefile — no
-harness-side project-type detection.
+Runs `make` before every commit. The project defines what "valid" means
+through its `Makefile` — currently this runs `nix build`, verifying the full
+build and all tests. No harness-side project-type detection needed.
 
 ## Repository structure
 
 ```
 vt-pi/
 ├── flake.nix                  # Nix build — packages everything
+├── flake.lock
 ├── Makefile                   # Defines what "valid" means
 └── pi/
     ├── AGENTS.md              # System prompt (bundled into binary)
@@ -124,7 +126,7 @@ vt-pi/
     │   ├── exec-async.ts
     │   ├── git-utils.ts
     │   └── precheck.ts
-    └── skills/                # Bundled skills for agent instructions
+    └── skills/                # Skill definitions (populated at build time)
 ```
 
 ## Adding an extension
@@ -133,6 +135,13 @@ vt-pi/
 2. Import from `../../lib/` for shared helpers
 3. Add a `logic.test.ts` alongside your logic — tests run on `nix build`
 4. The flake auto-discovers and registers new extensions — no manual step
+
+## Adding a skill
+
+1. Create `.pi/skills/<name>/SKILL.md` with frontmatter (`name`, `description`)
+   and markdown body
+2. Add it with `git add .pi/skills/<name>/` (the flake discovers tracked skills)
+3. The agent sees it in the `<available_skills>` block of the system prompt
 
 ## Building
 
