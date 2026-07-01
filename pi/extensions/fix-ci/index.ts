@@ -33,13 +33,11 @@ import {
   generatePrTitle,
   createDraftPr,
   markPrReady,
-  addReviewers,
   type CheckResult,
   type FailureLog,
 } from "./logic.ts";
 
 const MAX_CYCLES = 3;
-const REVIEWERS = "vincent-thomas";
 
 export default function (pi: ExtensionAPI) {
   let cycleCount = 0;
@@ -469,13 +467,6 @@ export default function (pi: ExtensionAPI) {
               "",
               `⚠️ Could not mark PR #${prNum} as ready (may already be ready).`,
             );
-          }
-
-          const reviewers = await addReviewers(cwd, REVIEWERS, signal);
-          if (reviewers) {
-            successLines.push(`👀 Requested review from ${REVIEWERS}.`);
-          } else {
-            successLines.push(`⚠️ Could not request review from ${REVIEWERS}.`);
           }
         } else {
           successLines.push(
