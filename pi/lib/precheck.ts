@@ -53,7 +53,7 @@ export async function runPreChecks(
 	try {
 		const { stdout, stderr } = await execAsync(command, {
 			cwd,
-			timeout: 120_000,
+			timeout: 600_000,
 			signal,
 		});
 		const elapsed = ((Date.now() - start) / 1000).toFixed(1);
