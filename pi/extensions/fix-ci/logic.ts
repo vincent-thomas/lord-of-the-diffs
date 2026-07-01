@@ -992,7 +992,7 @@ export async function createDraftPr(
 		let base = "main";
 		try {
 			const { stdout: defaultBranch } = await execAsync(
-				"gh repo view --json defaultBranch --jq .defaultBranch 2>/dev/null",
+				"gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null",
 				{ cwd, timeout: 10_000, signal },
 			);
 			if (defaultBranch.trim()) base = defaultBranch.trim();
