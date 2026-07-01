@@ -1,5 +1,5 @@
 /**
- * logic.test.ts — tests for git-guard logic.
+ * logic.test.ts — tests for folder-protector logic.
  */
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";

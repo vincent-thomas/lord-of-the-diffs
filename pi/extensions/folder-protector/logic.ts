@@ -1,5 +1,5 @@
 /**
- * Logic for the git-guard extension.
+ * Logic for the folder-protector extension.
  *
  * Pure functions — no Pi imports allowed.
  */

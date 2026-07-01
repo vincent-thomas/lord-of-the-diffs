@@ -1,5 +1,5 @@
 /**
- * Git Guard Extension
+ * Folder Protector Extension
  *
  * Blocks any Pi tool from writing to or editing files inside banned folders
  * (e.g. .git/). Folder names are configured in logic.ts's BANNED_FOLDERS list.
