@@ -1,37 +1,28 @@
 /**
  * Git Guard Extension
  *
- * Blocks any Pi tool from writing to or editing files inside the .git
- * directory. Prevents accidental or intentional corruption of Git internals.
+ * Blocks any Pi tool from writing to or editing files inside banned folders
+ * (e.g. .git/). Folder names are configured in logic.ts's BANNED_FOLDERS list.
  *
  * Blocked tools:
- *   - write (creating or overwriting files in .git/)
- *   - edit (modifying files in .git/)
- *   - bash (commands that write to .git/ paths, e.g. cp, mv, rm, redirections)
+ *   - write (creating or overwriting files in banned folders)
+ *   - edit (modifying files in banned folders)
+ *   - bash (commands that write to banned folder paths, e.g. cp, mv, rm)
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
-import { isInsideDotGit } from "./logic.ts";
+import { BANNED_FOLDERS, isPathInsideBannedFolder } from "./logic.ts";
 
-/** Name of the tool call argument that holds the target path. */
-const PATH_ARG: Record<string, string> = {
-	write: "path",
-	edit: "path",
-};
+/** Check if a bash command writes to a banned folder path (cp, mv, rm, etc.). */
+function bashTargetsBannedFolder(command: string): string | null {
+	// Build a pattern matching any banned folder as a path segment
+	const escaped = BANNED_FOLDERS.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+	const pattern = new RegExp(`(?:^|/)(?:${escaped.join("|")})(?:/|$)`);
 
-/** Tools that write to file paths. */
-const WRITE_TOOLS = new Set(["write", "edit"]);
-
-/** Check if a bash command writes to a .git/ path (cp, mv, rm, redirections, etc.). */
-function bashTargetsDotGit(command: string): boolean {
-	// Look for a path argument that starts with .git/ or contains /.git/
-	// after common file-manipulation commands
-	const dotGitPattern = /(?:\/|^)\.git(?:\/|$)/;
-	
 	// Split on pipes, &&, ||, ; to check individual segments
 	const segments = command.split(/\|\||&&|;|\|/);
-	
+
 	for (const segment of segments) {
 		const trimmed = segment.trim();
 		// Only check segments with file-manip commands
@@ -39,59 +30,55 @@ function bashTargetsDotGit(command: string): boolean {
 			// Extract arguments (skip the command name)
 			const args = trimmed.split(/\s+/).slice(1);
 			for (const arg of args) {
-				if (dotGitPattern.test(arg) && !arg.startsWith("-")) {
-					return true;
+				if (pattern.test(arg) && !arg.startsWith("-")) {
+					return arg;
 				}
 			}
 		}
 	}
-	
-	return false;
+
+	return null;
 }
 
 export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event, ctx) => {
-		// Block write/edit tools targeting .git/ paths
+		// Block write/edit tools targeting banned folder paths
 		if (isToolCallEventType("write", event) || isToolCallEventType("edit", event)) {
 			const toolType = isToolCallEventType("write", event) ? "write" : "edit";
 			const filePath: string | undefined = event.input.path;
-			
-			if (filePath && isInsideDotGit(filePath)) {
+
+			if (filePath && isPathInsideBannedFolder(filePath, BANNED_FOLDERS)) {
 				if (ctx.hasUI) {
 					ctx.ui.notify(
-						`✋ Cannot ${toolType} "${filePath}" — .git directory is protected.`,
+						`✋ Cannot ${toolType} "${filePath}" — protected folder.`,
 						"warning",
 					);
 				}
 				return {
 					block: true,
 					reason:
-						`Cannot ${toolType} "${filePath}" — the .git directory and its contents ` +
-						`are protected from modification. Git internals should only be changed ` +
-						`through proper Git commands (git commit, git branch, etc.).`,
-				};
+						`Cannot ${toolType} "${filePath}" — this path is inside a protected folder. ` +
+						`Files inside these directories should not be modified directly.`, 				};
 			}
 			return;
 		}
 
-		// Block bash commands that target .git/ with file-manipulation tools
+		// Block bash commands that target banned folders with file-manipulation tools
 		if (isToolCallEventType("bash", event)) {
 			const command = event.input.command ?? "";
-			if (bashTargetsDotGit(command)) {
+			const match = bashTargetsBannedFolder(command);
+			if (match) {
 				if (ctx.hasUI) {
 					ctx.ui.notify(
-						`🚫 Blocked shell command targeting .git/ directory.`,
+						`🚫 Blocked shell command targeting protected folder: ${match}`,
 						"warning",
 					);
 				}
 				return {
 					block: true,
 					reason:
-						`Shell commands that manipulate files inside .git/ are not allowed. ` +
-						`The .git directory and its contents are protected from modification. ` +
-						`Use Git Pi tools (git_commit, push_and_check_ci) or proper Git commands ` +
-						`to interact with the repository.`,
-				};
+						`Shell commands that manipulate files inside protected folders are not allowed. ` +
+						`The path "${match}" is inside a protected directory.`, 				};
 			}
 			return;
 		}

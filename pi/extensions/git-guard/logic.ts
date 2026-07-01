@@ -4,18 +4,29 @@
  * Pure functions — no Pi imports allowed.
  */
 
+/**
+ * List of banned folder names. Any path whose segments contain one of these
+ * folder names (as an exact segment match) is blocked from write/edit/bash.
+ */
+export const BANNED_FOLDERS: string[] = [
+	".git",
+];
+
 /** Normalize path separators and remove trailing slash. */
-export function normalizePath(p: string): string {
+function normalizePath(p: string): string {
 	return p.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-/** Check whether a file path is inside a .git directory (or is .git itself). */
-export function isInsideDotGit(path: string): boolean {
+/**
+ * Check whether a file path falls within any of the banned folders.
+ * Matches exact path segments — e.g. ".git" matches ".git/HEAD" but not
+ * ".gitignore" or ".gittest".
+ */
+export function isPathInsideBannedFolder(path: string, bannedFolders: string[]): boolean {
 	const normalized = normalizePath(path);
-	// Check if any path segment is ".git"
 	const segments = normalized.split("/");
-	for (let i = 0; i < segments.length; i++) {
-		if (segments[i] === ".git") return true;
+	for (const folder of bannedFolders) {
+		if (segments.includes(folder)) return true;
 	}
 	return false;
 }
