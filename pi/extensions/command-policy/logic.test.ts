@@ -356,11 +356,12 @@ test("allows commands by exact command", () => {
 
 test("allows git on a subcommand basis", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
-		["diff"], ["log"], ["show"], ["branch"],
+		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
 		["rev-parse"], ["merge-base"], ["commit"], ["rm"],
 	]);
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
+	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
 });
 
 test("can explicitly ban entries with model guidance", () => {
@@ -373,6 +374,8 @@ test("can explicitly ban entries with model guidance", () => {
 test("supports banned flags per entry", () => {
 	assert.ok(findEntry("rm")?.bannedFlags?.includes("-rf"));
 	assert.ok(findEntry("git checkout")?.bannedFlags?.includes("-b"));
+	assert.ok(findEntry("git branch")?.bannedFlags?.includes("--unset-upstream"));
+	assert.ok(findEntry("git branch")?.bannedFlags?.includes("--set-upstream-to"));
 });
 
 test("supports allowed flags per allowed entry", () => {
