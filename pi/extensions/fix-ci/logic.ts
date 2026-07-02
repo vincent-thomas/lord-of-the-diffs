@@ -503,9 +503,23 @@ export async function getPrBaseBranch(
 	cwd: string,
 	signal?: AbortSignal,
 ): Promise<string | null> {
+	// Try to get the base branch from an existing PR first.
 	try {
 		const { stdout } = await execAsync(
 			"gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null",
+			{ cwd, timeout: 15_000, signal },
+		);
+		const baseFromPr = stdout.trim();
+		if (baseFromPr) return baseFromPr;
+	} catch {
+		// No PR yet — fall through to default branch detection.
+	}
+
+	// Fall back to the repo's default branch (e.g. "main") when no PR exists.
+	// This ensures the base-branch-ahead check runs even on the first push.
+	try {
+		const { stdout } = await execAsync(
+			"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
 			{ cwd, timeout: 15_000, signal },
 		);
 		return stdout.trim() || null;
