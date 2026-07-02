@@ -24,6 +24,53 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
+        # ── GitHub App credential helper (read by git's credential helper protocol) ─
+        ghAppCredHelper = pkgs.writeShellApplication {
+          name = "github-app-credential-helper";
+          text = ''
+            TOKEN_FILE="''${PI_GITHUB_TOKEN_FILE:-$HOME/.config/pi/github-app-token}"
+
+            case "$1" in
+              get)
+                # Git sends protocol/host/path on stdin, terminated by blank line.
+                while IFS= read -r line; do [ -z "$line" ] && break; done
+
+                if [ -f "$TOKEN_FILE" ]; then
+                  echo "username=x-access-token"
+                  echo "password=$(cat "$TOKEN_FILE")"
+                fi
+                ;;
+              store|erase)
+                # Token is managed externally — no-op.
+                ;;
+            esac
+          '';
+        };
+
+        # ── Custom gitconfig — app identity + credential helper + SSH→HTTPS rewrite ─
+        customGitconfig = pkgs.writeText "gitconfig" ''
+          [user]
+            name = lord-of-the-diffs[bot]
+            email = 123456+lord-of-the-diffs[bot]@users.noreply.github.com
+
+          [credential]
+            helper = ${ghAppCredHelper}/bin/github-app-credential-helper
+
+          [url "https://github.com/"]
+            insteadOf = "git@github.com:"
+        '';
+
+        # ── Custom git wrapper — isolated from host git config ─────────────────────
+        customGit = pkgs.writeShellApplication {
+          name = "git";
+          runtimeInputs = [ pkgs.git ];
+          text = ''
+            export GIT_CONFIG_SYSTEM="${customGitconfig}"
+            export GIT_CONFIG_GLOBAL="/dev/null"
+            exec git "$@"
+          '';
+        };
+
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -205,7 +252,8 @@
               # Replace the wrapper with one that includes customizations
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md" \
+                --prefix PATH : "${customGit}/bin"
             '';
       in
       {
