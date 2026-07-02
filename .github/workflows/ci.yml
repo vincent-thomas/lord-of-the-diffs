@@ -17,6 +17,9 @@ jobs:
       !github.event.pull_request.draft &&
       github.event.pull_request.user.login == 'lord-of-the-diffs[bot]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Enable auto-merge
         env:
