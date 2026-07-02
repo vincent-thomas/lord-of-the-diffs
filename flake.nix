@@ -262,6 +262,7 @@
           pi = pi;
           piBase = piBase;
           piCustomizations = piCustomizations;
+          git = customGit;
         };
 
         apps.default = {
