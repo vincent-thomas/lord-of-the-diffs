@@ -51,7 +51,7 @@
         customGitconfig = pkgs.writeText "gitconfig" ''
           [user]
             name = lord-of-the-diffs[bot]
-            email = 123456+lord-of-the-diffs[bot]@users.noreply.github.com
+            email = 4200307+lord-of-the-diffs@users.noreply.github.com
 
           [credential]
             helper = ${ghAppCredHelper}/bin/github-app-credential-helper
