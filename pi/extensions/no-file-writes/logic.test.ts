@@ -19,6 +19,12 @@ const shouldBlock = [
 	"FOO=bar echo test >> data.txt",
 	"env echo x > file",
 	"echo 'multi\nline' >> app.log",
+	// No space between operator and target (valid bash).
+	"echo hi >file",
+	"echo hi >>file",
+	"printf '%s' >out.json",
+	"cmd arg >/tmp/out",
+	"cmd arg >>/tmp/log",
 ];
 
 for (const cmd of shouldBlock) {
@@ -38,6 +44,11 @@ const shouldPass = [
 	"command 2> /dev/stderr",
 	"build 1>&2",
 	"test >&1",
+	// No-space forms targeting excluded targets — still fine.
+	"echo hi >/dev/null",
+	"echo hi >>/dev/null",
+	"cmd 2>/dev/stderr",
+	"cmd >&1",
 	"grep pattern files",
 	"echo concatenate things",
 	"which printf",
