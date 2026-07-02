@@ -24,6 +24,115 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
+        # ── Token generator for GitHub App auth ──────────────────────────────
+        # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
+        # Prints just the raw token to stdout.
+        lotdToken = pkgs.writeShellScriptBin "lotd-token" ''
+          set -eu
+
+          CONFIG=''${LOTD_CONFIG_FILE:-}
+          if [ -z "$CONFIG" ] || [ ! -f "$CONFIG" ]; then
+            echo "lotd-token: LOTD_CONFIG_FILE not set or file not found: '$CONFIG'" >&2
+            exit 1
+          fi
+
+          APP_ID=$(${pkgs.jq}/bin/jq -r '.appId' "$CONFIG")
+          INSTALL_ID=$(${pkgs.jq}/bin/jq -r '.installId' "$CONFIG")
+          KEY_PATH=$(${pkgs.jq}/bin/jq -r '.privateKeyPath' "$CONFIG")
+
+          if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ] || \
+             [ -z "$INSTALL_ID" ] || [ "$INSTALL_ID" = "null" ] || \
+             [ -z "$KEY_PATH" ] || [ "$KEY_PATH" = "null" ]; then
+            echo "lotd-token: missing or null field(s) in config (need appId, installId, privateKeyPath)" >&2
+            exit 1
+          fi
+
+          if [ ! -f "$KEY_PATH" ]; then
+            echo "lotd-token: private key file not found: $KEY_PATH" >&2
+            exit 1
+          fi
+
+          # Build RS256 JWT (valid 10 minutes)
+          b64() { ${pkgs.coreutils}/bin/base64 -w 0 | tr -d '=' | tr '/+' '_-' ; }
+          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+          now=$(date +%s)
+          payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$now" $((now + 600)) "$APP_ID" | b64)
+          signed_input="''${header}.''${payload}"
+          sig=$(printf '%s' "$signed_input" | ${pkgs.openssl}/bin/openssl dgst -sha256 -sign "$KEY_PATH" -binary | b64)
+          jwt="''${signed_input}.''${sig}"
+
+          # Exchange JWT for installation token
+          RESPONSE=$(${pkgs.curl}/bin/curl -s -X POST \
+            -H "Authorization: Bearer $jwt" \
+            -H "Accept: application/vnd.github+json" \
+            -H "User-Agent: vt-pi-agent" \
+            "https://api.github.com/app/installations/''${INSTALL_ID}/access_tokens")
+          TOKEN=$(printf '%s' "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.token')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "lotd-token: failed to obtain installation token from GitHub API" >&2
+            echo "GitHub response: $RESPONSE" >&2
+            exit 1
+          fi
+
+          printf '%s' "$TOKEN"
+        '';
+
+        # ── Git credential helper (calls lotd-token) ─────────────────────────
+        # Git invokes this on-demand; wraps the raw token in credential protocol.
+        lotdCredentialHelper = pkgs.writeShellScriptBin "lotd-credential-helper" ''
+          set -eu
+          printf 'username=x-access-token\npassword=%s\n' "$(${lotdToken}/bin/lotd-token)"
+        '';
+
+        # ── Git with credential helper + HTTPS enforcement ──────────────────
+        gitconfig = pkgs.writeText "gitconfig" ''
+          [credential]
+              helper = ${lotdCredentialHelper}/bin/lotd-credential-helper
+          [url "https://"]
+              insteadOf = git://
+          [url "https://github.com/"]
+              insteadOf = git@github.com:
+              insteadOf = ssh://git@github.com/
+        '';
+
+        git = pkgs.writeShellScriptBin "git" ''
+          set -eu
+
+          CONFIG=''${LOTD_CONFIG_FILE:-}
+          if [ -z "$CONFIG" ]; then
+            echo "git: LOTD_CONFIG_FILE not set" >&2
+            exit 1
+          fi
+
+          LOGIN=$(${pkgs.jq}/bin/jq -r '.login' "$CONFIG")
+          if [ -z "$LOGIN" ] || [ "$LOGIN" = "null" ]; then
+            echo "git: missing or null 'login' in config" >&2
+            exit 1
+          fi
+
+          USER_ID=$(${gh}/bin/gh api "/users/$LOGIN" --jq '.id')
+          if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+            echo "git: failed to get user ID for '$LOGIN'" >&2
+            exit 1
+          fi
+
+          export GIT_AUTHOR_NAME="$LOGIN"
+          export GIT_AUTHOR_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
+          export GIT_COMMITTER_NAME="$LOGIN"
+          export GIT_COMMITTER_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
+          export GIT_CONFIG_SYSTEM=${gitconfig}
+
+          exec ${pkgs.git}/bin/git "$@"
+        '';
+
+        # ── gh wrapper with automated GitHub App auth ────────────────────────
+        gh = pkgs.writeShellScriptBin "gh" ''
+          set -eu
+          export GH_TOKEN=$(${lotdToken}/bin/lotd-token)
+          exec ${pkgs.gh}/bin/gh "$@"
+        '';
+
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -145,7 +254,7 @@
               cp -r ${./pi/extensions}/. $out/extensions/
               cp -r ${./pi/lib}/. $out/lib/
 
-              # Copy skills and AGENTS.md
+              # Copy skills, AGENTS.md, and bin scripts
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
 
@@ -202,9 +311,17 @@
                 extra_flags="$extra_flags --skill $skill"
               done
 
-              # Replace the wrapper with one that includes customizations
+              # Include the credential helper binary
+              cp ${lotdCredentialHelper}/bin/lotd-credential-helper $out/bin/lotd-credential-helper
+              cp ${lotdToken}/bin/lotd-token $out/bin/lotd-token
+
+              # Replace the wrapper: go back to node directly.
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
+                --run '[ -n "$LOTD_CONFIG_FILE" ] || { echo "pi: LOTD_CONFIG_FILE must be set" >&2; exit 1; }' \
+                --run '[ -f "$LOTD_CONFIG_FILE" ] || { echo "pi: config file not found: $LOTD_CONFIG_FILE" >&2; exit 1; }' \
+                --prefix PATH : ${git}/bin \
+                --prefix PATH : ${gh}/bin \
                 --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
             '';
       in
@@ -214,6 +331,10 @@
           pi = pi;
           piBase = piBase;
           piCustomizations = piCustomizations;
+          lotd-credential-helper = lotdCredentialHelper;
+          lotd-token = lotdToken;
+          git = git;
+          gh = gh;
         };
 
         apps.default = {
