@@ -292,6 +292,7 @@
               # with GIT_ASKPASS set so git push auto-generates a token on demand.
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
+                --prefix PATH : ${git}/bin \
                 --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
             '';
       in
