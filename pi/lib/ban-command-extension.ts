@@ -29,7 +29,7 @@ function hasHereDoc(text: string): boolean {
 		if (quote) { if (ch === quote) quote = null; continue; }
 		if (ch === "'" || ch === '"') { quote = ch; continue; }
 		// << or <<- outside quotes = here-doc
-		if (ch === "<" && (next === "<" || (next === "<" && i + 2 < text.length && text[i + 2] === "-"))) {
+		if (ch === "<" && next === "<") {
 			return true;
 		}
 	}
