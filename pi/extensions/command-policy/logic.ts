@@ -2,6 +2,7 @@
  * Command policy definitions for shell command allow rules.
  */
 
+import { isAwkCommand, isPerlCommand, isPythonCommand } from "../../lib/command-utils.ts";
 import { CommandPolicyStatus, type CommandPolicyEntry } from "../../lib/command-policy-types.ts";
 
 export const COMMAND_POLICY_SYSTEM_PROMPT = `
@@ -23,25 +24,19 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	{
 		name: "Python",
 		status: CommandPolicyStatus.Banned,
-		command: (cmd: string): boolean => {
-	    return /^python(?:\d+(?:\.\d+)?)?$/.test(cmd);
-    },
+		command: isPythonCommand,
 		description: "Use safer shell tools or Pi tools instead. For JSON, prefer jq.",
 	},
 	{
 		name: "Perl",
 		status: CommandPolicyStatus.Banned,
-		command: (cmd: string): boolean => {
-	    return /^perl(?:\d+(?:\.\d+)?)?$/.test(cmd);
-    },
+		command: isPerlCommand,
 		description: "Use safer shell tools or Pi tools instead. For JSON, prefer jq.",
 	},
 	{
 		name: "awk",
 		status: CommandPolicyStatus.Banned,
-		command: (cmd: string): boolean => {
-	    return /^(?:g|m|n)?awk$/.test(cmd);
-    },
+		command: isAwkCommand,
 		description: "Use the read tool with offset/limit, or simpler tools like head, tail, wc, or rg.",
 	},
 	{ name: "ls", status: CommandPolicyStatus.Allowed, command: "ls" },
