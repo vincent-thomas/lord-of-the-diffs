@@ -981,17 +981,30 @@ export async function generatePrBody(
 	signal?: AbortSignal,
 ): Promise<string> {
 	try {
-		// Determine the base branch (default to origin/main, fall back to HEAD~).
+		// Determine the repo's default branch, then find the fork point.
 		let base: string;
 		try {
-			const { stdout } = await execAsync(
-				"git rev-parse --abbrev-ref HEAD",
-				{ cwd, timeout: 5_000, signal },
-			);
-			const branch = stdout.trim();
-			// Try to find the fork point from the remote base branch.
+			// Detect the default branch via gh (avoid hardcoding "main").
+			let defaultBranch = "main";
+			try {
+				const { stdout: defaultRef } = await execAsync(
+					"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
+					{ cwd, timeout: 10_000, signal },
+				);
+				if (defaultRef.trim()) defaultBranch = defaultRef.trim();
+			} catch {
+				// fallback to main
+			}
+
+			// Fetch the latest base branch ref so merge-base is accurate.
+			await execAsync(`git fetch origin ${defaultBranch} 2>/dev/null`, {
+				cwd,
+				timeout: 30_000,
+				signal,
+			});
+
 			const { stdout: mergeBase } = await execAsync(
-				"git merge-base HEAD origin/main 2>/dev/null || echo HEAD~1",
+				`git merge-base HEAD origin/${defaultBranch} 2>/dev/null || echo HEAD~1`,
 				{ cwd, timeout: 10_000, signal },
 			);
 			base = mergeBase.trim();
