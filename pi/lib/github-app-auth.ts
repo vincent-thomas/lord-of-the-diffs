@@ -39,9 +39,18 @@ export interface GitHubAppConfig {
 // Config
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Config (cached after first read-and-scrub)
+// ---------------------------------------------------------------------------
+
+let cachedConfig: GitHubAppConfig | null = null;
+
 /**
  * Read GitHub App config from environment variables, then scrub them from
  * the process environment so child processes (git, gh, etc.) cannot see them.
+ *
+ * The config is cached in memory after the first successful read, so
+ * subsequent calls don't need the env vars and will not scrub again.
  *
  * Expects:
  *   GITHUB_APP_ID              — numeric app ID (e.g. "4200307")
@@ -54,6 +63,8 @@ export interface GitHubAppConfig {
  * Throws if any are missing.
  */
 export function readConfigFromEnv(): GitHubAppConfig {
+	if (cachedConfig) return cachedConfig;
+
 	const appId = process.env.GITHUB_APP_ID;
 	const installationId = process.env.GITHUB_APP_INSTALLATION_ID;
 	const rawKey = process.env.GITHUB_APP_PRIVATE_KEY;
@@ -77,7 +88,15 @@ export function readConfigFromEnv(): GitHubAppConfig {
 		privateKey = rawKey;
 	}
 
-	return { appId, installationId, privateKey };
+	cachedConfig = { appId, installationId, privateKey };
+	return cachedConfig;
+}
+
+/**
+ * Reset cached config (for testing).
+ */
+export function resetConfigCache(): void {
+	cachedConfig = null;
 }
 
 /**
