@@ -82,9 +82,7 @@
         # Git invokes this on-demand; wraps the raw token in credential protocol.
         lotdCredentialHelper = pkgs.writeShellScriptBin "lotd-credential-helper" ''
           set -eu
-          exec 3>&1 1>&2
-          TOKEN=$(${lotdToken}/bin/lotd-token)
-          printf 'username=x-access-token\npassword=%s\n' "$TOKEN" >&3
+          printf 'username=x-access-token\npassword=%s\n' "$(${lotdToken}/bin/lotd-token)"
         '';
 
         # ── Git with credential helper + HTTPS enforcement ──────────────────
@@ -98,20 +96,35 @@
               insteadOf = ssh://git@github.com/
         '';
 
-        git = pkgs.symlinkJoin {
-          name = "git-with-credential-helper";
-          paths = [ pkgs.git ];
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-          postBuild = ''
-            wrapProgram $out/bin/git \
-              --set GIT_CONFIG_SYSTEM ${gitconfig}
-          '';
-          meta = with pkgs.lib; {
-            description = "Git with lotd-credential-helper and HTTPS-only remote enforcement";
-            mainProgram = "git";
-            platforms = platforms.unix;
-          };
-        };
+        git = pkgs.writeShellScriptBin "git" ''
+          set -eu
+
+          CONFIG=''${LOTD_CONFIG_FILE:-}
+          if [ -z "$CONFIG" ]; then
+            echo "git: LOTD_CONFIG_FILE not set" >&2
+            exit 1
+          fi
+
+          LOGIN=$(${pkgs.jq}/bin/jq -r '.login' "$CONFIG")
+          if [ -z "$LOGIN" ] || [ "$LOGIN" = "null" ]; then
+            echo "git: missing or null 'login' in config" >&2
+            exit 1
+          fi
+
+          USER_ID=$(${gh}/bin/gh api "/users/$LOGIN" --jq '.id')
+          if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+            echo "git: failed to get user ID for '$LOGIN'" >&2
+            exit 1
+          fi
+
+          export GIT_AUTHOR_NAME="$LOGIN"
+          export GIT_AUTHOR_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
+          export GIT_COMMITTER_NAME="$LOGIN"
+          export GIT_COMMITTER_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
+          export GIT_CONFIG_SYSTEM=${gitconfig}
+
+          exec ${pkgs.git}/bin/git "$@"
+        '';
 
         # ── gh wrapper with automated GitHub App auth ────────────────────────
         gh = pkgs.writeShellScriptBin "gh" ''
