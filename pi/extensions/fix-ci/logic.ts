@@ -1098,3 +1098,194 @@ export async function addReviewers(
 		return false;
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Review types
+// ---------------------------------------------------------------------------
+
+export interface Review {
+	id: number;
+	author: string;
+	state: string; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING
+	body: string;
+	submittedAt: string;
+}
+
+export interface ReviewComment {
+	id: number;
+	pullRequestReviewId: number;
+	path: string;
+	line: number | null;
+	body: string;
+	author: string;
+}
+
+export interface ReviewResult {
+	decision: "approved" | "changes_requested" | "pending" | "timeout";
+	reviews: Review[];
+	comments: ReviewComment[]; // only from the most recent CHANGES_REQUESTED review
+	reviewer: string | null;
+	reviewBody: string;
+}
+
+// ---------------------------------------------------------------------------
+// Review fetching
+// ---------------------------------------------------------------------------
+
+async function fetchPrReviews(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<Review[]> {
+	try {
+		const { stdout } = await execAsync(
+			"gh pr view --json reviews --jq '.reviews'",
+			{ cwd, timeout: 15_000, signal },
+		);
+		if (!stdout.trim()) return [];
+		const raw = JSON.parse(stdout.trim());
+		return (Array.isArray(raw) ? raw : []).map((r: Record<string, unknown>) => ({
+			id: r.id as number,
+			author: (r.user as Record<string, unknown>)?.login as string ?? "unknown",
+			state: r.state as string ?? "UNKNOWN",
+			body: r.body as string ?? "",
+			submittedAt: r.submitted_at as string ?? "",
+		}));
+	} catch {
+		return [];
+	}
+}
+
+async function fetchReviewComments(
+	cwd: string,
+	prNumber: number,
+	signal?: AbortSignal,
+): Promise<ReviewComment[]> {
+	try {
+		const { stdout } = await execAsync(
+			`gh api repos/{owner}/{repo}/pulls/${prNumber}/comments`,
+			{ cwd, timeout: 15_000, signal },
+		);
+		if (!stdout.trim()) return [];
+		const raw = JSON.parse(stdout.trim());
+		return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
+			id: c.id as number,
+			pullRequestReviewId: c.pull_request_review_id as number,
+			path: c.path as string ?? "",
+			line: c.line as number ?? null,
+			body: c.body as string ?? "",
+			author: (c.user as Record<string, unknown>)?.login as string ?? "unknown",
+		}));
+	} catch {
+		return [];
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Review polling
+// ---------------------------------------------------------------------------
+
+export const MAX_REVIEW_POLLS = 120; // 120 * 30s = 60 minutes
+const REVIEW_POLL_INTERVAL_MS = 30_000;
+
+/**
+ * Poll for PR reviews until a decision is reached (approved or changes
+ * requested). Times out after MAX_REVIEW_POLLS polls.
+ *
+ * - APPROVED → returns immediately (auto-merge should handle the rest)
+ * - CHANGES_REQUESTED → fetches inline comments linked to that review
+ * - COMMENTED (no decision yet) → logs via onStatus, keeps polling
+ * - PENDING / no reviews → logs via onStatus, keeps polling
+ */
+export async function waitForReview(
+	cwd: string,
+	signal?: AbortSignal,
+	onStatus?: (msg: string) => void,
+): Promise<ReviewResult> {
+	let polls = 0;
+
+	while (polls < MAX_REVIEW_POLLS) {
+		if (signal?.aborted) {
+			return { decision: "pending", reviews: [], comments: [], reviewer: null, reviewBody: "" };
+		}
+
+		polls++;
+
+		const reviews = await fetchPrReviews(cwd, signal);
+		const nonDismissed = reviews.filter((r) => r.state !== "DISMISSED");
+
+		if (nonDismissed.length === 0) {
+			onStatus?.(`Poll ${polls}/${MAX_REVIEW_POLLS}: awaiting reviewer assignment…`);
+			await sleep(REVIEW_POLL_INTERVAL_MS, signal);
+			continue;
+		}
+
+		// Find the most recent non-dismissed review by submittedAt.
+		const latest = nonDismissed.reduce((a, b) =>
+			a.submittedAt > b.submittedAt ? a : b,
+		);
+
+		const prNumber = await detectPrNumber(cwd, signal);
+
+		switch (latest.state) {
+			case "APPROVED": {
+				onStatus?.(`PR approved by @${latest.author}.`);
+				return {
+					decision: "approved",
+					reviews,
+					comments: [],
+					reviewer: latest.author,
+					reviewBody: latest.body,
+				};
+			}
+			case "CHANGES_REQUESTED": {
+				onStatus?.(
+					`Changes requested by @${latest.author}. Fetching review comments…`,
+				);
+				const allComments = prNumber
+					? await fetchReviewComments(cwd, prNumber, signal)
+					: [];
+				// Only comments submitted as part of this specific review.
+				const linkedComments = allComments.filter(
+					(c) => c.pullRequestReviewId === latest.id,
+				);
+				return {
+					decision: "changes_requested",
+					reviews,
+					comments: linkedComments,
+					reviewer: latest.author,
+					reviewBody: latest.body,
+				};
+			}
+			case "COMMENTED": {
+				const bodyPreview = latest.body
+					? ` — "${latest.body.slice(0, 80)}${latest.body.length > 80 ? "…" : ""}"`
+					: "";
+				onStatus?.(
+					`Poll ${polls}/${MAX_REVIEW_POLLS}: @${latest.author} commented${bodyPreview} — awaiting decision…`,
+				);
+				break;
+			}
+			case "PENDING": {
+				onStatus?.(
+					`Poll ${polls}/${MAX_REVIEW_POLLS}: @${latest.author} is reviewing (pending)…`,
+				);
+				break;
+			}
+			default: {
+				onStatus?.(
+					`Poll ${polls}/${MAX_REVIEW_POLLS}: review state is "${latest.state}" — waiting…`,
+				);
+			}
+		}
+
+		await sleep(REVIEW_POLL_INTERVAL_MS, signal);
+	}
+
+	return {
+		decision: "timeout",
+		reviews: [],
+		comments: [],
+		reviewer: null,
+		reviewBody: "",
+	};
+}
