@@ -46,47 +46,93 @@ export interface GitHubAppConfig {
 let cachedConfig: GitHubAppConfig | null = null;
 
 /**
+ * Config file path: ~/.config/pi/github-app-config.json
+ *
+ * Format:
+ *   {
+ *     "appId": "4200307",
+ *     "installationId": "143969016",
+ *     "privateKeyFile": "/path/to/key.pem"
+ *   }
+ */
+export function configFilePath(): string {
+	return join(homedir(), ".config", "pi", "github-app-config.json");
+}
+
+/**
  * Read GitHub App config from environment variables, then scrub them from
  * the process environment so child processes (git, gh, etc.) cannot see them.
+ *
+ * Falls back to ~/.config/pi/github-app-config.json if env vars aren't set.
  *
  * The config is cached in memory after the first successful read, so
  * subsequent calls don't need the env vars and will not scrub again.
  *
- * Expects:
- *   GITHUB_APP_ID              — numeric app ID (e.g. "4200307")
- *   GITHUB_APP_INSTALLATION_ID — numeric installation ID
- *   GITHUB_APP_PRIVATE_KEY     — PEM-encoded private key (a full
- *                                -----BEGIN RSA PRIVATE KEY-----
- *                                block).  If the value starts with "/" it
- *                                is treated as a file path and read.
+ * Env var priority (takes precedence over config file):
+ *   GITHUB_APP_ID                    — numeric app ID (e.g. "4200307")
+ *   GITHUB_APP_INSTALLATION_ID       — numeric installation ID
+ *   GITHUB_APP_PRIVATE_KEY_FILE      — path to the PEM-encoded private key file
  *
- * Throws if any are missing.
+ * Throws if neither env vars nor config file is available.
  */
 export function readConfigFromEnv(): GitHubAppConfig {
 	if (cachedConfig) return cachedConfig;
 
-	const appId = process.env.GITHUB_APP_ID;
-	const installationId = process.env.GITHUB_APP_INSTALLATION_ID;
-	const rawKey = process.env.GITHUB_APP_PRIVATE_KEY;
+	const envAppId = process.env.GITHUB_APP_ID;
+	const envInstallationId = process.env.GITHUB_APP_INSTALLATION_ID;
+	const envKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_FILE;
 
-	if (!appId) throw new Error("GITHUB_APP_ID is not set");
-	if (!installationId) throw new Error("GITHUB_APP_INSTALLATION_ID is not set");
-	if (!rawKey) throw new Error("GITHUB_APP_PRIVATE_KEY is not set");
+	// ── Env vars take priority ───────────────────────────────────────
+	if (envAppId && envInstallationId && envKeyPath) {
+		// Scrub secrets from the process environment immediately so child
+		// processes (git, gh spawned via execAsync) cannot access them.
+		delete process.env.GITHUB_APP_PRIVATE_KEY_FILE;
+		delete process.env.GITHUB_APP_ID;
+		delete process.env.GITHUB_APP_INSTALLATION_ID;
 
-	// Scrub secrets from the process environment immediately so child
-	// processes (git, gh spawned via execAsync) cannot access them.
-	delete process.env.GITHUB_APP_PRIVATE_KEY;
-	delete process.env.GITHUB_APP_ID;
-	delete process.env.GITHUB_APP_INSTALLATION_ID;
+		// Read the private key from the file.
+		const privateKey = readFileSync(envKeyPath, "utf8");
 
-	// If the value looks like a PEM string, use it directly.
-	// Otherwise treat it as a file path.
-	let privateKey: string;
-	if (rawKey.startsWith("-----BEGIN ")) {
-		privateKey = rawKey;
-	} else {
-		privateKey = readFileSync(rawKey, "utf8");
+		cachedConfig = {
+			appId: envAppId,
+			installationId: envInstallationId,
+			privateKey,
+		};
+		return cachedConfig;
 	}
+
+	// ── Fall back to config file ────────────────────────────────────
+	const cfgPath = configFilePath();
+	let raw: string;
+	try {
+		raw = readFileSync(cfgPath, "utf8");
+	} catch {
+		throw new Error(
+			"GitHub App credentials not found. Set env vars " +
+				"GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and " +
+				"GITHUB_APP_PRIVATE_KEY_FILE, or create " +
+				cfgPath,
+		);
+	}
+
+	let parsed: { appId?: string; installationId?: string; privateKeyFile?: string };
+	try {
+		parsed = JSON.parse(raw);
+	} catch {
+		throw new Error(
+			`GitHub App config file ${cfgPath} is not valid JSON: ${raw.slice(0, 100)}`,
+		);
+	}
+
+	const appId = parsed.appId;
+	const installationId = parsed.installationId;
+	const keyPath = parsed.privateKeyFile;
+
+	if (!appId) throw new Error(`Config file ${cfgPath} is missing "appId"`);
+	if (!installationId) throw new Error(`Config file ${cfgPath} is missing "installationId"`);
+	if (!keyPath) throw new Error(`Config file ${cfgPath} is missing "privateKeyFile"`);
+
+	const privateKey = readFileSync(keyPath, "utf8");
 
 	cachedConfig = { appId, installationId, privateKey };
 	return cachedConfig;

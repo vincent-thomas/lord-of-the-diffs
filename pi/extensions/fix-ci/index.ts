@@ -73,7 +73,7 @@ export default function (pi: ExtensionAPI) {
               text:
                 `Failed to refresh GitHub App token. ` +
                 `Ensure GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and ` +
-                `GITHUB_APP_PRIVATE_KEY are set.\n\n` +
+                `GITHUB_APP_PRIVATE_KEY_FILE are set.\n\n` +
                 `Error: ${err instanceof Error ? err.message : String(err)}`,
             },
           ],
