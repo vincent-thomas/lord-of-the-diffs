@@ -72,8 +72,9 @@ export default function (pi: ExtensionAPI) {
               type: "text",
               text:
                 `Failed to refresh GitHub App token. ` +
-                `Ensure GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and ` +
-                `GITHUB_APP_PRIVATE_KEY_FILE are set.\n\n` +
+                `Set LOTD_CONFIG_FILE to point to your GitHub App config JSON, ` +
+                `or create it at the default location $HOME/.config/pi/github-app-config.json.` +
+                `\n\n` +
                 `Error: ${err instanceof Error ? err.message : String(err)}`,
             },
           ],

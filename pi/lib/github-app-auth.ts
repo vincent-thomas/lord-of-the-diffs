@@ -46,7 +46,9 @@ export interface GitHubAppConfig {
 let cachedConfig: GitHubAppConfig | null = null;
 
 /**
- * Config file path: ~/.config/pi/github-app-config.json
+ * Resolve the config file path.
+ * Respects LOTD_CONFIG_FILE env var, falls back to
+ * ~/.config/pi/github-app-config.json.
  *
  * Format:
  *   {
@@ -56,61 +58,34 @@ let cachedConfig: GitHubAppConfig | null = null;
  *   }
  */
 export function configFilePath(): string {
-	return join(homedir(), ".config", "pi", "github-app-config.json");
+	return (
+		process.env.LOTD_CONFIG_FILE ??
+		join(homedir(), ".config", "pi", "github-app-config.json")
+	);
 }
 
 /**
- * Read GitHub App config from environment variables, then scrub them from
- * the process environment so child processes (git, gh, etc.) cannot see them.
+ * Read GitHub App config from the JSON config file.
  *
- * Falls back to ~/.config/pi/github-app-config.json if env vars aren't set.
+ * The path comes from:
+ *   1. LOTD_CONFIG_FILE env var (takes priority)
+ *   2. ~/.config/pi/github-app-config.json (default)
  *
- * The config is cached in memory after the first successful read, so
- * subsequent calls don't need the env vars and will not scrub again.
+ * The config is cached in memory after the first successful read.
  *
- * Env var priority (takes precedence over config file):
- *   GITHUB_APP_ID                    — numeric app ID (e.g. "4200307")
- *   GITHUB_APP_INSTALLATION_ID       — numeric installation ID
- *   GITHUB_APP_PRIVATE_KEY_FILE      — path to the PEM-encoded private key file
- *
- * Throws if neither env vars nor config file is available.
+ * Throws if the file is missing, invalid JSON, or missing required fields.
  */
 export function readConfigFromEnv(): GitHubAppConfig {
 	if (cachedConfig) return cachedConfig;
 
-	const envAppId = process.env.GITHUB_APP_ID;
-	const envInstallationId = process.env.GITHUB_APP_INSTALLATION_ID;
-	const envKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_FILE;
-
-	// ── Env vars take priority ───────────────────────────────────────
-	if (envAppId && envInstallationId && envKeyPath) {
-		// Scrub secrets from the process environment immediately so child
-		// processes (git, gh spawned via execAsync) cannot access them.
-		delete process.env.GITHUB_APP_PRIVATE_KEY_FILE;
-		delete process.env.GITHUB_APP_ID;
-		delete process.env.GITHUB_APP_INSTALLATION_ID;
-
-		// Read the private key from the file.
-		const privateKey = readFileSync(envKeyPath, "utf8");
-
-		cachedConfig = {
-			appId: envAppId,
-			installationId: envInstallationId,
-			privateKey,
-		};
-		return cachedConfig;
-	}
-
-	// ── Fall back to config file ────────────────────────────────────
 	const cfgPath = configFilePath();
 	let raw: string;
 	try {
 		raw = readFileSync(cfgPath, "utf8");
 	} catch {
 		throw new Error(
-			"GitHub App credentials not found. Set env vars " +
-				"GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and " +
-				"GITHUB_APP_PRIVATE_KEY_FILE, or create " +
+			"GitHub App config file not found. Set LOTD_CONFIG_FILE to the " +
+				"path of your JSON config file, or create one at " +
 				cfgPath,
 		);
 	}
