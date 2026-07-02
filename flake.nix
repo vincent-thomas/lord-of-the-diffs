@@ -71,6 +71,21 @@
           '';
         };
 
+        # ── Custom gh wrapper — reads token from rendezvous file ───────────────────
+        customGh = pkgs.writeShellApplication {
+          name = "gh";
+          runtimeInputs = [ pkgs.gh ];
+          text = ''
+            TOKEN_FILE="''${PI_GITHUB_TOKEN_FILE:-$HOME/.config/pi/github-app-token}"
+            GH_TOKEN=""
+            if [ -f "$TOKEN_FILE" ]; then
+              GH_TOKEN="$(cat "$TOKEN_FILE")"
+            fi
+            export GH_TOKEN
+            exec gh "$@"
+          '';
+        };
+
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -253,7 +268,7 @@
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
                 --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md" \
-                --prefix PATH : "${customGit}/bin"
+                --prefix PATH : "${customGit}/bin:${customGh}/bin"
             '';
       in
       {
@@ -263,6 +278,7 @@
           piBase = piBase;
           piCustomizations = piCustomizations;
           git = customGit;
+          gh = customGh;
         };
 
         apps.default = {
