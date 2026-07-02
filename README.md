@@ -14,7 +14,6 @@ $ pi
 ```
 
 ## Philosophy
-
 The harness is built around a simple premise: **the agent prioritises correct workflow over raw intelligence by constraining the wrong paths.**
 The constraints aren't there to limit capability — they're there to channel autonomy by always moving forward, methodically.
 
