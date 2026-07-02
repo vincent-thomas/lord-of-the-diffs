@@ -320,6 +320,7 @@
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
                 --run '[ -n "$LOTD_CONFIG_FILE" ] || { echo "pi: LOTD_CONFIG_FILE must be set" >&2; exit 1; }' \
                 --run '[ -f "$LOTD_CONFIG_FILE" ] || { echo "pi: config file not found: $LOTD_CONFIG_FILE" >&2; exit 1; }' \
+                --run 'export LOTD_CONFIG_FILE="$(cd "$(dirname "$LOTD_CONFIG_FILE")" && pwd)/$(basename "$LOTD_CONFIG_FILE")"' \
                 --prefix PATH : ${git}/bin \
                 --prefix PATH : ${gh}/bin \
                 --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
