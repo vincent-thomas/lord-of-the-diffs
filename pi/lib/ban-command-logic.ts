@@ -23,10 +23,23 @@ export function matchesEntry(use: CommandUse, entry: CommandPolicyEntry): boolea
 }
 
 /**
- * Check whether an arg matches a flag (exact or `flag=value` form).
+ * Check whether an arg matches a flag.
+ *
+ * Handles exact match, `flag=value` form, and combined short flags
+ * (e.g. `-rfv` matches banned flag `-r` or `-rf`).
  */
 export function flagMatches(arg: string, flag: string): boolean {
-	return arg === flag || arg.startsWith(`${flag}=`);
+	if (arg === flag || arg.startsWith(`${flag}=`)) return true;
+
+	// Handle combined short flags: `-rfv` should match banned `-r` or `-rf`.
+	// Short flags start with a single dash followed by non-dash characters.
+	const isShort = (s: string) => s.length >= 2 && s[0] === "-" && s[1] !== "-";
+	if (isShort(arg) && isShort(flag)) {
+		const argChars = new Set(arg.slice(1));
+		return [...flag.slice(1)].every((ch) => argChars.has(ch));
+	}
+
+	return false;
 }
 
 /**
