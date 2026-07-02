@@ -79,13 +79,13 @@ export function readConfigFromEnv(): GitHubAppConfig {
 	delete process.env.GITHUB_APP_ID;
 	delete process.env.GITHUB_APP_INSTALLATION_ID;
 
-	// If the value looks like an absolute path or a relative path with slashes,
-	// treat it as a file path and read it.
+	// If the value looks like a PEM string, use it directly.
+	// Otherwise treat it as a file path.
 	let privateKey: string;
-	if (rawKey.startsWith("/") || rawKey.includes("/")) {
-		privateKey = readFileSync(rawKey, "utf8");
-	} else {
+	if (rawKey.startsWith("-----BEGIN ")) {
 		privateKey = rawKey;
+	} else {
+		privateKey = readFileSync(rawKey, "utf8");
 	}
 
 	cachedConfig = { appId, installationId, privateKey };
