@@ -32,8 +32,11 @@ import {
   generatePrTitle,
   createDraftPr,
   markPrReady,
+  waitForReview,
+  MAX_REVIEW_POLLS,
   type CheckResult,
   type FailureLog,
+  type ReviewResult,
 } from "./logic.ts";
 
 const MAX_CYCLES = 3;
@@ -450,7 +453,7 @@ export default function (pi: ExtensionAPI) {
           formatChecks(pollResult.checks),
         ];
 
-        // ── Mark PR ready and add reviewers ────────────────────────
+        // ── Mark PR ready and wait for review ─────────────────────
         const prNum = await detectPrNumber(cwd, signal);
         if (prNum) {
           onUpdate?.({
@@ -472,6 +475,53 @@ export default function (pi: ExtensionAPI) {
             successLines.push(
               "",
               `⚠️ Could not mark PR #${prNum} as ready (may already be ready).`,
+            );
+          }
+
+          // ── Wait for review ──────────────────────────────────
+          onUpdate?.({
+            content: [
+              { type: "text", text: "Waiting for review…" },
+            ],
+          });
+
+          const reviewResult = await waitForReview(
+            cwd,
+            signal,
+            (status) => {
+              onUpdate?.({ content: [{ type: "text", text: status }] });
+            },
+          );
+
+          if (reviewResult.decision === "changes_requested") {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: formatChangesRequested(reviewResult),
+                },
+              ],
+              details: {
+                checks: pollResult.checks,
+                mode: pollResult.mode,
+                allPassed: true,
+                review: reviewResult,
+              },
+            };
+          }
+
+          if (reviewResult.decision === "approved") {
+            successLines.push(
+              "",
+              `✅ PR approved by @${reviewResult.reviewer}.`,
+            );
+            if (reviewResult.reviewBody) {
+              successLines.push("", `> ${reviewResult.reviewBody}`);
+            }
+          } else {
+            successLines.push(
+              "",
+              `⏳ Review still pending after ${MAX_REVIEW_POLLS} polls.`,
             );
           }
         } else {
@@ -649,6 +699,35 @@ function buildReport(
     }
     lines.push("");
   }
+
+  return lines.join("\n");
+}
+
+function formatChangesRequested(result: ReviewResult): string {
+  const lines: string[] = [];
+  lines.push(`## Review: Changes Requested by @${result.reviewer}`);
+  lines.push("");
+
+  if (result.reviewBody) {
+    lines.push(`> ${result.reviewBody.replace(/\n/g, "\n> ")}`);
+    lines.push("");
+  }
+
+  if (result.comments.length > 0) {
+    lines.push("### Inline comments");
+    lines.push("");
+    for (const c of result.comments) {
+      const location = c.line
+        ? `\`${c.path}:${c.line}\``
+        : `\`${c.path}\``;
+      lines.push(`- ${location} — ${c.body.replace(/\n/g, " ")}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "Address these comments, commit the fixes, and call `push_and_check_ci` again.",
+  );
 
   return lines.join("\n");
 }
