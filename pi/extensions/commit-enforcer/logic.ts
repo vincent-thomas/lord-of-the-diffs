@@ -4,31 +4,11 @@
  * No pi imports — testable logic only.
  */
 import { execAsync } from "../../lib/exec-async.ts";
-import { currentBranch, hasUpstream } from "../../lib/git-utils.ts";
+import { currentBranch, hasUpstream, isWorktreeDirty } from "../../lib/git-utils.ts";
 
 export interface GitState {
 	dirty: boolean;
 	unpushed: boolean;
-}
-
-/**
- * Check whether the working tree has uncommitted changes.
- * Returns false if the directory is not a git repo.
- */
-export async function isWorktreeDirty(
-	cwd: string,
-	signal?: AbortSignal,
-): Promise<boolean> {
-	try {
-		const result = await execAsync("git status --porcelain", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		return result.stdout.trim().length > 0;
-	} catch {
-		return false;
-	}
 }
 
 /**
