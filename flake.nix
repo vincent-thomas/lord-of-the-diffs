@@ -81,6 +81,32 @@
           printf 'username=x-access-token\npassword=%s\n' "$TOKEN" >&3
         '';
 
+        # ── Git with credential helper + HTTPS enforcement ──────────────────
+        gitconfig = pkgs.writeText "gitconfig" ''
+          [credential]
+              helper = ${lotdCredentialHelper}/bin/lotd-credential-helper
+          [url "https://"]
+              insteadOf = git://
+          [url "https://github.com/"]
+              insteadOf = git@github.com:
+              insteadOf = ssh://git@github.com/
+        '';
+
+        git = pkgs.symlinkJoin {
+          name = "git-with-credential-helper";
+          paths = [ pkgs.git ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/git \
+              --set GIT_CONFIG_SYSTEM ${gitconfig}
+          '';
+          meta = with pkgs.lib; {
+            description = "Git with lotd-credential-helper and HTTPS-only remote enforcement";
+            mainProgram = "git";
+            platforms = platforms.unix;
+          };
+        };
+
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -205,8 +231,6 @@
               # Copy skills, AGENTS.md, and bin scripts
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
-              mkdir -p $out/bin
-              cp -r ${./pi/bin}/. $out/bin/
 
               # Run tests on extensions
               ${lib.concatMapStrings
@@ -261,10 +285,6 @@
                 extra_flags="$extra_flags --skill $skill"
               done
 
-              # Copy the GIT_ASKPASS helper (invoked by git when it needs credentials)
-              mkdir -p $out/share/pi/bin
-              cp ${piCustomizations}/bin/github-app-askpass.ts $out/share/pi/bin/github-app-askpass.ts
-
               # Include the credential helper binary
               cp ${lotdCredentialHelper}/bin/lotd-credential-helper $out/bin/lotd-credential-helper
 
@@ -272,12 +292,7 @@
               # with GIT_ASKPASS set so git push auto-generates a token on demand.
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md" \
-                --set GIT_AUTHOR_NAME "vt-pi agent[bot]" \
-                --set GIT_AUTHOR_EMAIL "CHANGEME-APPID+vt-pi-agent[bot]@users.noreply.github.com" \
-                --set GIT_COMMITTER_NAME "vt-pi agent[bot]" \
-                --set GIT_COMMITTER_EMAIL "CHANGEME-APPID+vt-pi-agent[bot]@users.noreply.github.com" \
-                --set GIT_ASKPASS "${nodejs}/bin/node $out/share/pi/bin/github-app-askpass.ts"
+                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
             '';
       in
       {
@@ -287,6 +302,7 @@
           piBase = piBase;
           piCustomizations = piCustomizations;
           lotd-credential-helper = lotdCredentialHelper;
+          git = git;
         };
 
         apps.default = {
