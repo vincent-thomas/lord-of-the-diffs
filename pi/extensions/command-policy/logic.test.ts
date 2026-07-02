@@ -198,7 +198,13 @@ test("text with only whitespace produces no uses", () => {
 suite("flagMatches — flag comparison");
 test("exact match", () => assert.ok(flagMatches("-rf", "-rf")));
 test("starts with flag= form", () => assert.ok(flagMatches("--recursive=true", "--recursive")));
-test("no match when different flag", () => assert.ok(!flagMatches("-rf", "-r")));
+test("combined short flag matches constituent single-char", () => assert.ok(flagMatches("-rfv", "-r")));
+test("combined short flag matches constituent multi-char", () => assert.ok(flagMatches("-rfv", "-rf")));
+test("combined short flag matches reversed order", () => assert.ok(flagMatches("-rf", "-fr")));
+test("combined short flag does not match unrelated char", () => assert.ok(!flagMatches("-rfv", "-l")));
+test("no match when completely different flag", () => assert.ok(!flagMatches("-rf", "-x")));
+test("long flag does not spuriously match short flag", () => assert.ok(!flagMatches("--recursive", "-r")));
+test("short flag does not spuriously match long flag", () => assert.ok(!flagMatches("-r", "--recursive")));
 
 suite("commandFlags — flag extraction");
 test("extracts flags only", () => {
@@ -263,9 +269,19 @@ test("command name is case-insensitive (use name is already lowercased by comman
 });
 
 suite("findBannedFlag — flag bans");
-test("detects banned flag in args", () => {
-	const use: CommandUse = { name: "rm", args: ["-rf", "dir"], segment: "rm -rf dir" };
+test("detects banned flag in combined short args (-rfv vs -rf)", () => {
+	const use: CommandUse = { name: "rm", args: ["-rfv", "dir"], segment: "rm -rfv dir" };
 	assert.equal(findBannedFlag(use, { name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-rf"] }), "-rf");
+});
+
+test("detects banned single-char flag in combined short args (-rfv vs -r)", () => {
+	const use: CommandUse = { name: "rm", args: ["-rfv", "dir"], segment: "rm -rfv dir" };
+	assert.equal(findBannedFlag(use, { name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-r"] }), "-r");
+});
+
+test("detects banned flag in combined short args with git checkout (-fb vs -b)", () => {
+	const use: CommandUse = { name: "git", args: ["checkout", "-fb", "feature"], segment: "git checkout -fb feature" };
+	assert.equal(findBannedFlag(use, { name: "git checkout", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["checkout"]], bannedFlags: ["-b", "-B"] }), "-b");
 });
 
 test("returns null when banned flag is absent", () => {
@@ -285,7 +301,9 @@ test("bannedFlags empty list returns null", () => {
 
 test("multiple banned flags returns first match", () => {
 	const use: CommandUse = { name: "rm", args: ["-rf", "--recursive", "dir"], segment: "rm -rf --recursive dir" };
-	assert.equal(findBannedFlag(use, { name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-r", "-rf", "--recursive"] }), "-rf");
+	// -r appears first in bannedFlags; with combined-flag matching, -rf
+	// contains -r's character, so -r is the first match.
+	assert.equal(findBannedFlag(use, { name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-r", "-rf", "--recursive"] }), "-r");
 });
 
 test("no bannedFlags on entry returns null", () => {
