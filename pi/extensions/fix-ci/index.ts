@@ -219,8 +219,7 @@ export default function (pi: ExtensionAPI) {
               {
                 type: "text",
                 text:
-                  `Remote and local have diverged — pulling via merge` +
-                  `pulling changes via merge (non-history-rewriting)…`,
+                  `Remote and local have diverged — pulling changes via merge (non-history-rewriting)…`,
               },
             ],
           });
