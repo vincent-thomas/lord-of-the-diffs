@@ -1,9 +1,10 @@
 /**
  * logic.test.ts — tests for command policy allow-list helpers.
  *
- * Run with:   node logic.test.ts
+ * Run with:   node --test logic.test.ts
  */
 import assert from "node:assert/strict";
+import { test, suite } from "node:test";
 import { CommandPolicyStatus } from "../../lib/command-policy-types.ts";
 import { COMMAND_POLICY_ENTRIES } from "./logic.ts";
 import {
@@ -24,25 +25,6 @@ import {
 	getCommandUses,
 	type CommandUse,
 } from "../../lib/ban-command-logic.ts";
-
-let passed = 0;
-let failed = 0;
-
-function test(name: string, fn: () => void): void {
-	try {
-		fn();
-		console.log(`  ✓  ${name}`);
-		passed++;
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : String(err);
-		console.error(`  ✗  ${name}\n       ${msg}`);
-		failed++;
-	}
-}
-
-function suite(name: string): void {
-	console.log(`\n${name}`);
-}
 
 function commandNames(text: string): string[] {
 	return splitCommandSegments(text)
@@ -381,6 +363,3 @@ test("supports allowed flags per allowed entry", () => {
 	assert.ok(findEntry("git status")?.allowedFlags?.includes("--short"));
 	assert.equal(findEntry("git status")?.bannedFlags, undefined);
 });
-
-console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);

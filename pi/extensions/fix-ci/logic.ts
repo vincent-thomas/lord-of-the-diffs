@@ -436,7 +436,7 @@ export async function fetchFailureLogs(
 	return results;
 }
 
-function extractRunId(url: string | null): string | null {
+export function extractRunId(url: string | null): string | null {
 	if (!url) return null;
 	const match = url.match(/\/actions\/runs\/(\d+)/);
 	return match?.[1] ?? null;
@@ -474,7 +474,7 @@ async function fetchRunLog(
 	}
 }
 
-function trimLog(log: string, maxLines: number): string {
+export function trimLog(log: string, maxLines: number): string {
 	const lines = log.split("\n");
 	if (lines.length <= maxLines) return log;
 	return `… (${lines.length - maxLines} lines trimmed) …\n` + lines.slice(-maxLines).join("\n");

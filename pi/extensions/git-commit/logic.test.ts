@@ -1,42 +1,19 @@
 /**
  * logic.test.ts — tests for git-commit helpers.
  *
- * Run with:   node logic.test.ts
+ * Run with:   node --test logic.test.ts
  */
 import assert from "node:assert/strict";
+import { test, suite } from "node:test";
+import { isDefaultBranch, gitCommit } from "./logic.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { isDefaultBranch, gitCommit } from "./logic.ts";
 
 // ---------------------------------------------------------------------------
-// Tiny test harness (async-capable)
+// Test helpers
 // ---------------------------------------------------------------------------
-
-let passed = 0;
-let failed = 0;
-const asyncTests: Array<() => Promise<void>> = [];
-
-function test(name: string, fn: (() => void) | (() => Promise<void>)): void {
-	const run = async () => {
-		try {
-			await fn();
-			console.log(`  ✓  ${name}`);
-			passed++;
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			console.error(`  ✗  ${name}\n       ${msg}`);
-			failed++;
-		}
-	};
-	asyncTests.push(run);
-}
-
-function suite(name: string, fn: () => void): void {
-	asyncTests.push(async () => console.log(`\n${name}`));
-	fn();
-}
 
 // ---------------------------------------------------------------------------
 // Git repo helpers
@@ -159,13 +136,3 @@ suite("gitCommit", () => {
 		}),
 	);
 });
-
-// ---------------------------------------------------------------------------
-// Run all tests & summary
-// ---------------------------------------------------------------------------
-
-(async () => {
-	for (const t of asyncTests) await t();
-	console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-	if (failed > 0) process.exit(1);
-})();
