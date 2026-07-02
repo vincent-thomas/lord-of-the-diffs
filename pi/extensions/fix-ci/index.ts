@@ -101,7 +101,7 @@ export default function (pi: ExtensionAPI) {
                 },
               ],
               details: {
-                mergeConflict: true,
+                mergeFailed: true,
                 error: "Unable to determine current branch",
               },
             };
@@ -124,35 +124,60 @@ export default function (pi: ExtensionAPI) {
           );
 
           if (!mergeResult.success) {
-            const conflictList =
-              mergeResult.conflictPaths.length > 0
-                ? mergeResult.conflictPaths.map((p) => `- \`${p}\``).join("\n")
-                : "Check the merge output below for conflicting files.";
+            if (mergeResult.conflictPaths.length > 0) {
+              const conflictList = mergeResult.conflictPaths
+                .map((p) => `- \`${p}\``)
+                .join("\n");
 
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      `## ⚠️ Merge Conflicts Detected\n\n` +
+                      `The PR branch \`${branchName}\` has conflicts with the base branch ` +
+                      `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
+                      `\`${branchName}\` but there are unresolved conflicts.\n\n` +
+                      `### Conflicting files:\n${conflictList}\n\n` +
+                      `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+                      `### To resolve:\n` +
+                      `1. Resolve the conflicts in the listed files\n` +
+                      `2. \`git add\` the resolved files\n` +
+                      `3. Commit the merge (the merge message is pre-filled)\n` +
+                      `4. Run \`push_and_check_ci\` again`,
+                  },
+                ],
+                details: {
+                  mergeConflict: true,
+                  baseBranch: prBase,
+                  currentBranch: branchName,
+                  conflictPaths: mergeResult.conflictPaths,
+                  mergeOutput: mergeResult.output,
+                },
+              };
+            }
+
+            // Merge failed but no conflicts — likely a tooling or network error.
             return {
               content: [
                 {
                   type: "text",
                   text:
-                    `## ⚠️ Merge Conflicts Detected\n\n` +
-                    `The PR branch \`${branchName}\` has conflicts with the base branch ` +
-                    `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
-                    `\`${branchName}\` but there are unresolved conflicts.\n\n` +
-                    `### Conflicting files:\n${conflictList}\n\n` +
-                    `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
-                    `### To resolve:\n` +
-                    `1. Resolve the conflicts in the listed files\n` +
-                    `2. \`git add\` the resolved files\n` +
-                    `3. Commit the merge (the merge message is pre-filled)\n` +
-                    `4. Run \`push_and_check_ci\` again`,
+                    `## ⚠️ Merge Failed\n\n` +
+                    `Failed to merge \`${prBase}\` into \`${branchName}\`. ` +
+                    `No merge conflicts were detected — this is likely a ` +
+                    `transient tooling issue (e.g. network or auth).\n\n` +
+                    `### Error output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+                    `Try running \`push_and_check_ci\` again. ` +
+                    `If the problem persists, merge \`${prBase}\` into your branch manually ` +
+                    `(\`git fetch origin ${prBase} && git merge origin/${prBase}\`).`,
                 },
               ],
               details: {
-                mergeConflict: true,
+                mergeFailed: true,
                 baseBranch: prBase,
                 currentBranch: branchName,
-                conflictPaths: mergeResult.conflictPaths,
-                mergeOutput: mergeResult.output,
+                errorOutput: mergeResult.output,
               },
             };
           }
@@ -203,34 +228,57 @@ export default function (pi: ExtensionAPI) {
           const pullResult = await pullRemoteChanges(cwd, signal);
 
           if (!pullResult.success) {
-            const conflictList =
-              pullResult.conflictPaths.length > 0
-                ? pullResult.conflictPaths.map((p) => `- \`${p}\``).join("\n")
-                : "Check the pull output below for conflicting files.";
-
             cycleCount = 0;
+
+            if (pullResult.conflictPaths.length > 0) {
+              const conflictList = pullResult.conflictPaths
+                .map((p) => `- \`${p}\``)
+                .join("\n");
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      `## ⚠️ Merge Conflicts During Pull\n\n` +
+                      `The remote branch has commits ahead of local. ` +
+                      `I attempted to pull them via merge but there are unresolved ` +
+                      `conflicts.\n\n` +
+                      `### Conflicting files:\n${conflictList}\n\n` +
+                      `### Pull output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
+                      `### To resolve:\n` +
+                      `1. Resolve the conflicts in the listed files\n` +
+                      `2. \`git add\` the resolved files\n` +
+                      `3. Commit the merge\n` +
+                      `4. Run \`push_and_check_ci\` again`,
+                  },
+                ],
+                details: {
+                  mergeConflict: true,
+                  conflictPaths: pullResult.conflictPaths,
+                  pullOutput: pullResult.output,
+                },
+              };
+            }
+
+            // Pull failed but no conflicts — likely a tooling or network error.
             return {
               content: [
                 {
                   type: "text",
                   text:
-                    `## ⚠️ Merge Conflicts During Pull\n\n` +
-                    `The remote branch has commits ahead of local. ` +
-                    `I attempted to pull them via merge but there are unresolved ` +
-                    `conflicts.\n\n` +
-                    `### Conflicting files:\n${conflictList}\n\n` +
-                    `### Pull output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
-                    `### To resolve:\n` +
-                    `1. Resolve the conflicts in the listed files\n` +
-                    `2. \`git add\` the resolved files\n` +
-                    `3. Commit the merge\n` +
-                    `4. Run \`push_and_check_ci\` again`,
+                    `## ⚠️ Pull Failed\n\n` +
+                    `Failed to pull remote changes. ` +
+                    `No merge conflicts were detected — this is likely a ` +
+                    `transient tooling issue (e.g. network or auth).\n\n` +
+                    `### Error output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
+                    `Try running \`push_and_check_ci\` again. ` +
+                    `If the problem persists, pull manually.`,
                 },
               ],
               details: {
-                mergeConflict: true,
-                conflictPaths: pullResult.conflictPaths,
-                pullOutput: pullResult.output,
+                pullFailed: true,
+                errorOutput: pullResult.output,
               },
             };
           }
