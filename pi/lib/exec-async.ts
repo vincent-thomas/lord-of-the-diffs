@@ -23,6 +23,15 @@ export function execAsync(
 	command: string,
 	options: { cwd?: string; timeout?: number; signal?: AbortSignal },
 ): Promise<ExecResult> {
+	if (options.signal?.aborted) {
+		return Promise.reject(
+			Object.assign(new Error("The operation was aborted."), {
+				stdout: "",
+				stderr: "AbortError: signal already aborted",
+			}),
+		);
+	}
+
 	return new Promise((resolve, reject) => {
 		const child: ChildProcess = exec(
 			command,
