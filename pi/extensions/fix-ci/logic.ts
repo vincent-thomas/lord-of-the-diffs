@@ -1201,6 +1201,26 @@ export const MAX_REVIEW_POLLS = 120; // 120 * 30s = 60 minutes
 const REVIEW_POLL_INTERVAL_MS = 30_000;
 
 /**
+ * Get the ISO 8601 timestamp of the latest commit on the current branch.
+ * Returns null if git fails.
+ */
+async function getLatestCommitTimestamp(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<string | null> {
+	try {
+		const { stdout } = await execAsync("git log -1 --format=%cI HEAD", {
+			cwd,
+			timeout: 5_000,
+			signal,
+		});
+		return stdout.trim() || null;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Poll for PR reviews until a decision is reached (approved or changes
  * requested). Times out after MAX_REVIEW_POLLS polls.
  *
@@ -1216,6 +1236,11 @@ export async function waitForReview(
 ): Promise<ReviewResult> {
 	let polls = 0;
 
+	// Only consider reviews submitted after the latest commit on this branch.
+	// This prevents stale reviews (e.g. from before a fix push) from being
+	// acted on — GitHub dismisses them on new commits anyway.
+	const latestCommitTs = await getLatestCommitTimestamp(cwd, signal);
+
 	while (polls < MAX_REVIEW_POLLS) {
 		if (signal?.aborted) {
 			return { decision: "pending", reviews: [], comments: [], reviewer: null, reviewBody: "" };
@@ -1226,14 +1251,23 @@ export async function waitForReview(
 		const reviews = await fetchPrReviews(cwd, signal);
 		const nonDismissed = reviews.filter((r) => r.state !== "DISMISSED");
 
-		if (nonDismissed.length === 0) {
-			onStatus?.(`Poll ${polls}/${MAX_REVIEW_POLLS}: awaiting reviewer assignment…`);
+		// Filter to only reviews submitted after the latest commit.
+		const afterCommit = latestCommitTs
+			? nonDismissed.filter((r) => r.submittedAt >= latestCommitTs)
+			: nonDismissed;
+
+		if (afterCommit.length === 0) {
+			const hasStale = nonDismissed.length > 0;
+			const msg = hasStale
+				? `Poll ${polls}/${MAX_REVIEW_POLLS}: existing reviews are for older commits — awaiting review on latest changes…`
+				: `Poll ${polls}/${MAX_REVIEW_POLLS}: awaiting reviewer assignment…`;
+			onStatus?.(msg);
 			await sleep(REVIEW_POLL_INTERVAL_MS, signal);
 			continue;
 		}
 
 		// Find the most recent non-dismissed review by submittedAt.
-		const latest = nonDismissed.reduce((a, b) =>
+		const latest = afterCommit.reduce((a, b) =>
 			a.submittedAt > b.submittedAt ? a : b,
 		);
 
