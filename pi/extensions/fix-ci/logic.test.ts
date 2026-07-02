@@ -1,10 +1,10 @@
 /**
  * logic.test.ts — tests for fix-ci helpers.
  *
- * Run with:   node logic.test.ts
+ * Run with:   node --test logic.test.ts
  */
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { test, suite } from "node:test";
 import {
 	isFailure,
 	isGitPushLine,
@@ -15,39 +15,17 @@ import {
 	allSuitesComplete,
 	hasUnpushedCommits,
 	gitPush,
+	extractRunId,
+	trimLog,
 } from "./logic.ts";
+import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 // ---------------------------------------------------------------------------
-// Tiny test harness
+// Test helpers
 // ---------------------------------------------------------------------------
-
-let passed = 0;
-let failed = 0;
-
-const asyncTests: Array<() => Promise<void>> = [];
-
-function test(name: string, fn: (() => void) | (() => Promise<void>)): void {
-	const run = async () => {
-		try {
-			await fn();
-			console.log(`  ✓  ${name}`);
-			passed++;
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			console.error(`  ✗  ${name}\n       ${msg}`);
-			failed++;
-		}
-	};
-	asyncTests.push(run);
-}
-
-function suite(name: string, fn: () => void): void {
-	asyncTests.push(async () => console.log(`\n${name}`));
-	fn();
-}
 
 // ---------------------------------------------------------------------------
 // isGitPushLine — blocked
@@ -202,16 +180,6 @@ suite("allSuitesComplete", () => {
 	test("any in_progress → not complete", () => assert.ok(!allSuitesComplete(["in_progress"])));
 });
 
-// ---------------------------------------------------------------------------
-// extractRunId (mirrors private logic)
-// ---------------------------------------------------------------------------
-
-function extractRunId(url: string | null): string | null {
-	if (!url) return null;
-	const match = url.match(/\/actions\/runs\/(\d+)/);
-	return match?.[1] ?? null;
-}
-
 suite("extractRunId", () => {
 	test("standard GitHub Actions URL", () => {
 		assert.equal(
@@ -229,16 +197,6 @@ suite("extractRunId", () => {
 		assert.equal(extractRunId("https://github.com/owner/repo/pull/42"), null));
 	test("empty string", () => assert.equal(extractRunId(""), null));
 });
-
-// ---------------------------------------------------------------------------
-// trimLog (mirrors private logic)
-// ---------------------------------------------------------------------------
-
-function trimLog(log: string, maxLines: number): string {
-	const lines = log.split("\n");
-	if (lines.length <= maxLines) return log;
-	return `… (${lines.length - maxLines} lines trimmed) …\n` + lines.slice(-maxLines).join("\n");
-}
 
 suite("trimLog", () => {
 	test("short log returned as-is", () => {
@@ -406,13 +364,3 @@ suite("gitPush", () => {
 		}),
 	);
 });
-
-// ---------------------------------------------------------------------------
-// Run all tests & summary
-// ---------------------------------------------------------------------------
-
-(async () => {
-	for (const t of asyncTests) await t();
-	console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-	if (failed > 0) process.exit(1);
-})();

@@ -262,7 +262,7 @@
               ${lib.concatMapStrings
                 (testFile: ''
                   echo "Running test: ${testFile}"
-                  ${nodejs}/bin/node $out/extensions/${testFile}
+                  ${nodejs}/bin/node --test $out/extensions/${testFile}
                 '')
                 (
                   map (f: lib.removePrefix (toString ./pi/extensions + "/") (toString f)) (
