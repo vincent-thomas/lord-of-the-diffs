@@ -19,6 +19,7 @@ import {
 import { isDefaultBranch, hasUpstreamBranch, branchExistsOnRemote } from "./logic.ts";
 import { runPreChecks, gitCommit } from "./logic.ts";
 import { execAsync } from "../../lib/exec-async.ts";
+import { refreshAndWriteToken } from "../../lib/github-app-auth.ts";
 
 export default function (pi: ExtensionAPI) {
 	// ── Tool: git_commit ──────────────────────────────────────────────────────
@@ -44,6 +45,27 @@ export default function (pi: ExtensionAPI) {
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const cwd = ctx.cwd;
+
+			// ── 0. Refresh GitHub App token ────────────────────────────
+			onUpdate?.({
+				content: [{ type: "text", text: "Refreshing GitHub App token…" }],
+			});
+			try {
+				await refreshAndWriteToken(signal);
+			} catch (err: unknown) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text:
+								`Failed to refresh GitHub App token. ` +
+								`Ensure GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and ` +
+								`GITHUB_APP_PRIVATE_KEY are set.\n\n` +
+								`Error: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					],
+				};
+			}
 
 			// 1. Check default branch.
 			const branch = currentBranch(cwd);

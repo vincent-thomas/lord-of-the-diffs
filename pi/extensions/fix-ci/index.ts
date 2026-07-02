@@ -11,6 +11,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { currentBranch } from "../../lib/git-utils.ts";
+import { refreshAndWriteToken } from "../../lib/github-app-auth.ts";
 import {
   gitPush,
   getHeadSha,
@@ -58,7 +59,29 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       const cwd = ctx.cwd;
 
-      // ── 0. Reject if working tree is dirty ─────────────────────────
+      // ── 0. Refresh GitHub App token ────────────────────────────
+      onUpdate?.({
+        content: [{ type: "text", text: "Refreshing GitHub App token…" }],
+      });
+      try {
+        await refreshAndWriteToken(signal);
+      } catch (err: unknown) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Failed to refresh GitHub App token. ` +
+                `Ensure GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and ` +
+                `GITHUB_APP_PRIVATE_KEY are set.\n\n` +
+                `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          details: { tokenRefreshFailed: true },
+        };
+      }
+
+      // ── 1. Reject if working tree is dirty ─────────────────────────
       onUpdate?.({
         content: [{ type: "text", text: "Checking for uncommitted changes…" }],
       });
