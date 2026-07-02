@@ -3,7 +3,7 @@
  */
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
-import { isPathInsideBannedFolder, BANNED_FOLDERS } from "./logic.ts";
+import { isPathInsideBannedFolder, BANNED_FOLDERS, findBannedFolderTarget } from "./logic.ts";
 
 suite("isPathInsideBannedFolder with .git in BANNED_FOLDERS");
 
@@ -55,4 +55,74 @@ test("does not match folders not in the list", () => {
 
 test("empty banned list returns false for everything", () => {
 	assert.ok(!isPathInsideBannedFolder(".git/HEAD", []));
+});
+
+suite("findBannedFolderTarget — file-manipulation commands in banned folders");
+
+test("detects cp targeting .git", () => {
+	assert.equal(findBannedFolderTarget("cp file.txt .git/somewhere", BANNED_FOLDERS), ".git/somewhere");
+});
+
+test("detects mv targeting .git", () => {
+	assert.equal(findBannedFolderTarget("mv .git/refs /tmp/", BANNED_FOLDERS), ".git/refs");
+});
+
+test("detects rm targeting .git", () => {
+	assert.equal(findBannedFolderTarget("rm -rf .git", BANNED_FOLDERS), ".git");
+});
+
+test("detects chmod targeting .git", () => {
+	assert.equal(findBannedFolderTarget("chmod -R 755 .git", BANNED_FOLDERS), ".git");
+});
+
+test("detects mkdir inside .git", () => {
+	assert.equal(findBannedFolderTarget("mkdir -p .git/foo/bar", BANNED_FOLDERS), ".git/foo/bar");
+});
+
+test("detects touch inside .git", () => {
+	assert.equal(findBannedFolderTarget("touch .git/config", BANNED_FOLDERS), ".git/config");
+});
+
+test("detects install targeting .git", () => {
+	assert.equal(findBannedFolderTarget("install file .git/bin/", BANNED_FOLDERS), ".git/bin/");
+});
+
+test("detects command through env wrapper", () => {
+	assert.equal(findBannedFolderTarget("env cp file .git/somewhere", BANNED_FOLDERS), ".git/somewhere");
+});
+
+test("detects command through sudo wrapper", () => {
+	assert.equal(findBannedFolderTarget("sudo cp file .git/somewhere", BANNED_FOLDERS), ".git/somewhere");
+});
+
+test("detects command when target is node_modules", () => {
+	assert.equal(findBannedFolderTarget("rm -rf node_modules", BANNED_FOLDERS), "node_modules");
+});
+
+test("detects command when target is target", () => {
+	assert.equal(findBannedFolderTarget("rm -rf target/", BANNED_FOLDERS), "target/");
+});
+
+test("detects in pipeline", () => {
+	assert.equal(findBannedFolderTarget("ls | cp file .git/x", BANNED_FOLDERS), ".git/x");
+});
+
+test("detects after &&", () => {
+	assert.equal(findBannedFolderTarget("echo ok && cp file .git/x", BANNED_FOLDERS), ".git/x");
+});
+
+test("returns null for non-file-manipulation commands", () => {
+	assert.equal(findBannedFolderTarget("cat .git/HEAD", BANNED_FOLDERS), null);
+});
+
+test("returns null for file-manipulation on non-banned path", () => {
+	assert.equal(findBannedFolderTarget("cp file.txt out/dir/", BANNED_FOLDERS), null);
+});
+
+test("returns null for benign commands", () => {
+	assert.equal(findBannedFolderTarget("ls -la", BANNED_FOLDERS), null);
+});
+
+test("returns null for empty command", () => {
+	assert.equal(findBannedFolderTarget("", BANNED_FOLDERS), null);
 });
