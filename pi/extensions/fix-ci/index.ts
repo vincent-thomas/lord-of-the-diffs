@@ -31,6 +31,7 @@ import {
   generatePrBody,
   generatePrTitle,
   createDraftPr,
+  getPrState,
   markPrReady,
   waitForReview,
   MAX_REVIEW_POLLS,
@@ -376,6 +377,36 @@ export default function (pi: ExtensionAPI) {
       }
 
       const cycle = cycleCount;
+
+      // ── Check if PR is already closed/merged (auto-merge may have landed) ─
+      const prState = await getPrState(cwd, signal);
+      if (prState === "MERGED") {
+        cycleCount = 0;
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `✅ Pull request was already merged. Nothing more to do.`,
+            },
+          ],
+          details: { prMerged: true },
+        };
+      }
+      if (prState === "CLOSED") {
+        cycleCount = 0;
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Pull request is closed (not merged). No CI checks to poll. ` +
+                `If you need to re-open it, do so manually and then call push_and_check_ci again.`,
+            },
+          ],
+          details: { prClosed: true },
+        };
+      }
 
       // 3. Poll checks
       onUpdate?.({

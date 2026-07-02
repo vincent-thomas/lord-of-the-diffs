@@ -99,13 +99,30 @@ export async function hasDirtyWorkingTree(
 
 export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise<number | null> {
 	try {
-		const { stdout } = await execAsync("gh pr view --json number,state --jq 'select(.state != \"CLOSED\") | .number' 2>/dev/null", {
+		const { stdout } = await execAsync("gh pr view --json number,state --jq 'select(.state != \"CLOSED\" and .state != \"MERGED\") | .number' 2>/dev/null", {
 			cwd,
 			timeout: 15_000,
 			signal,
 		});
 		const num = parseInt(stdout.trim(), 10);
 		return isNaN(num) ? null : num;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Get the state of the current branch's PR (OPEN, CLOSED, MERGED).
+ * Returns null if there is no PR for the current branch.
+ */
+export async function getPrState(cwd: string, signal?: AbortSignal): Promise<string | null> {
+	try {
+		const { stdout } = await execAsync("gh pr view --json state --jq '.state' 2>/dev/null", {
+			cwd,
+			timeout: 15_000,
+			signal,
+		});
+		return stdout.trim() || null;
 	} catch {
 		return null;
 	}
