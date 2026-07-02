@@ -24,6 +24,63 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
+        # ── Credential helper for GitHub App auth ────────────────────────────────
+        # Git invokes this on-demand; reads LOTD_CONFIG_FILE, generates a JWT,
+        # exchanges it for an installation token, outputs git credential protocol.
+        lotdCredentialHelper = pkgs.writeShellScriptBin "lotd-credential-helper" ''
+          set -eu
+
+          # All output goes to stderr except the final credential lines.
+          exec 3>&1 1>&2
+
+          CONFIG=''${LOTD_CONFIG_FILE:-''${1:-}}
+          if [ -z "$CONFIG" ] || [ ! -f "$CONFIG" ]; then
+            echo "lotd-credential-helper: LOTD_CONFIG_FILE not set or file not found: '$CONFIG'" >&2
+            exit 1
+          fi
+
+          APP_ID=$(${pkgs.jq}/bin/jq -r '.appId' "$CONFIG")
+          INSTALL_ID=$(${pkgs.jq}/bin/jq -r '.installId' "$CONFIG")
+          KEY_PATH=$(${pkgs.jq}/bin/jq -r '.privateKeyPath' "$CONFIG")
+
+          if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ] || \
+             [ -z "$INSTALL_ID" ] || [ "$INSTALL_ID" = "null" ] || \
+             [ -z "$KEY_PATH" ] || [ "$KEY_PATH" = "null" ]; then
+            echo "lotd-credential-helper: missing or null field(s) in config (need appId, installId, privateKeyPath)" >&2
+            exit 1
+          fi
+
+          if [ ! -f "$KEY_PATH" ]; then
+            echo "lotd-credential-helper: private key file not found: $KEY_PATH" >&2
+            exit 1
+          fi
+
+          # Build RS256 JWT (valid 10 minutes)
+          b64() { ${pkgs.coreutils}/bin/base64 -w 0 | tr -d '=' | tr '/+' '_-' ; }
+          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+          now=$(date +%s)
+          payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$now" $((now + 600)) "$APP_ID" | b64)
+          signed_input="''${header}.''${payload}"
+          sig=$(printf '%s' "$signed_input" | ${pkgs.openssl}/bin/openssl dgst -sha256 -sign "$KEY_PATH" -binary | b64)
+          jwt="''${signed_input}.''${sig}"
+
+          # Exchange JWT for installation token
+          RESPONSE=$(${pkgs.curl}/bin/curl -s -X POST \
+            -H "Authorization: Bearer $jwt" \
+            -H "Accept: application/vnd.github+json" \
+            -H "User-Agent: vt-pi-agent" \
+            "https://api.github.com/app/installations/''${INSTALL_ID}/access_tokens")
+          TOKEN=$(printf '%s' "$RESPONSE" | ${pkgs.jq}/bin/jq -r '.token')
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "lotd-credential-helper: failed to obtain installation token from GitHub API" >&2
+            echo "GitHub response: $RESPONSE" >&2
+            exit 1
+          fi
+
+          printf 'username=x-access-token\npassword=%s\n' "$TOKEN" >&3
+        '';
+
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = pkgs.buildNpmPackage {
           pname = "pi-coding-agent";
@@ -145,9 +202,11 @@
               cp -r ${./pi/extensions}/. $out/extensions/
               cp -r ${./pi/lib}/. $out/lib/
 
-              # Copy skills and AGENTS.md
+              # Copy skills, AGENTS.md, and bin scripts
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
+              mkdir -p $out/bin
+              cp -r ${./pi/bin}/. $out/bin/
 
               # Run tests on extensions
               ${lib.concatMapStrings
@@ -202,10 +261,23 @@
                 extra_flags="$extra_flags --skill $skill"
               done
 
-              # Replace the wrapper with one that includes customizations
+              # Copy the GIT_ASKPASS helper (invoked by git when it needs credentials)
+              mkdir -p $out/share/pi/bin
+              cp ${piCustomizations}/bin/github-app-askpass.ts $out/share/pi/bin/github-app-askpass.ts
+
+              # Include the credential helper binary
+              cp ${lotdCredentialHelper}/bin/lotd-credential-helper $out/bin/lotd-credential-helper
+
+              # Replace the wrapper: go back to node directly,
+              # with GIT_ASKPASS set so git push auto-generates a token on demand.
               rm $out/bin/pi
               makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md" \
+                --set GIT_AUTHOR_NAME "vt-pi agent[bot]" \
+                --set GIT_AUTHOR_EMAIL "CHANGEME-APPID+vt-pi-agent[bot]@users.noreply.github.com" \
+                --set GIT_COMMITTER_NAME "vt-pi agent[bot]" \
+                --set GIT_COMMITTER_EMAIL "CHANGEME-APPID+vt-pi-agent[bot]@users.noreply.github.com" \
+                --set GIT_ASKPASS "${nodejs}/bin/node $out/share/pi/bin/github-app-askpass.ts"
             '';
       in
       {
@@ -214,6 +286,7 @@
           pi = pi;
           piBase = piBase;
           piCustomizations = piCustomizations;
+          lotd-credential-helper = lotdCredentialHelper;
         };
 
         apps.default = {
