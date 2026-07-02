@@ -1,24 +1,10 @@
 /**
- * no-file-writes.test.ts — tests for blocking file write redirections
+ * no-file-writes logic tests — file write redirection detection
  */
 
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
-
-// Inline the detection function for testing
-function hasFileWriteRedirection(command: string): { found: boolean; segment?: string } {
-	const pattern = /(\s|^)(>>?)\s+(?!\/dev\/|&[12]\b)(\S+)/g;
-	const match = pattern.exec(command);
-	
-	if (match) {
-		return {
-			found: true,
-			segment: match[0].trim(),
-		};
-	}
-	
-	return { found: false };
-}
+import { hasFileWriteRedirection } from "./logic.ts";
 
 suite("no-file-writes — file write redirection detection");
 
