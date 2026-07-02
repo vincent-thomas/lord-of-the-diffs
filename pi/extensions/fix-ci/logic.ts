@@ -1175,7 +1175,7 @@ async function fetchPrReviews(
 		const raw = JSON.parse(stdout.trim());
 		return (Array.isArray(raw) ? raw : []).map((r: Record<string, unknown>) => ({
 			id: r.id as number,
-			author: (r.user as Record<string, unknown>)?.login as string ?? "unknown",
+			author: ((r.author ?? r.user) as Record<string, unknown>)?.login as string ?? "unknown",
 			state: r.state as string ?? "UNKNOWN",
 			body: r.body as string ?? "",
 			submittedAt: r.submitted_at as string ?? "",
