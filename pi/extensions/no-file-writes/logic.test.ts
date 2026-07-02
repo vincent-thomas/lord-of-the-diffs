@@ -25,6 +25,14 @@ const shouldBlock = [
 	"printf '%s' >out.json",
 	"cmd arg >/tmp/out",
 	"cmd arg >>/tmp/log",
+	// File-descriptor-prefixed redirects (2>file, 1>>file).
+	"cmd 2>file",
+	"cmd 2> file",
+	"cmd 1>>file",
+	"cmd 1>> file",
+	"cmd 2>/tmp/errors.log",
+	"build 3>output.txt",
+	"cmd 2>&1 3>trace.log",
 ];
 
 for (const cmd of shouldBlock) {
@@ -47,7 +55,6 @@ const shouldPass = [
 	// No-space forms targeting excluded targets — still fine.
 	"echo hi >/dev/null",
 	"echo hi >>/dev/null",
-	"cmd 2>/dev/stderr",
 	"cmd >&1",
 	"grep pattern files",
 	"echo concatenate things",

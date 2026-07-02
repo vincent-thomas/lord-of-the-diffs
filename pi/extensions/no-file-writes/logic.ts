@@ -10,11 +10,12 @@
  */
 export function hasFileWriteRedirection(command: string): { found: boolean; segment?: string } {
 	// Match > or >> optionally followed by whitespace then a file path.
+	// \d* catches fd-prefixed redirects like 2>file and 1>>file.
 	// Exclude: /dev/null, /dev/std*, &1, &2
 	// \s* allows both "> file" and ">file" (no space — valid in bash).
 	// (?:>>|>(?!>)) prevents >> from backtracking to > and letting the
 	// second > leak into the filename.
-	const pattern = /(?:^|\s)(?:>>|>(?!>))\s*(?!\/dev\/|&[12]\b)(\S+)/g;
+	const pattern = /(?:^|\s)\d*(?:>>|>(?!>))\s*(?!\/dev\/|&[12]\b)(\S+)/g;
 	const match = pattern.exec(command);
 
 	if (match) {
