@@ -258,6 +258,13 @@
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
 
+              # Run tests on lib
+              for test in $out/lib/*.test.ts; do
+                [ -f "$test" ] || continue
+                echo "Running test: lib/$(basename $test)"
+                ${nodejs}/bin/node --test $test
+              done
+
               # Run tests on extensions
               ${lib.concatMapStrings
                 (testFile: ''

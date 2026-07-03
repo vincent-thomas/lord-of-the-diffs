@@ -4,7 +4,6 @@
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
 import { isPathInsideBannedFolder, BANNED_FOLDERS, findBannedFolderTarget } from "./logic.ts";
-import { splitCommandSegments } from "../../lib/command-utils.ts";
 
 suite("isPathInsideBannedFolder with .git in BANNED_FOLDERS");
 
@@ -126,36 +125,4 @@ test("returns null for benign commands", () => {
 
 test("returns null for empty command", () => {
 	assert.equal(findBannedFolderTarget("", BANNED_FOLDERS), null);
-});
-
-suite("splitCommandSegments — process substitution");
-
-test("does not split on >(...) — keeps segment whole", () => {
-	const segments = splitCommandSegments("diff <(ls a) >(sort -r)");
-	const nonEmpty = segments.filter(Boolean);
-	assert.equal(nonEmpty.length, 1);
-	assert.ok(nonEmpty[0].includes(">("));
-});
-
-test("does not split on <(...) — keeps segment whole", () => {
-	const segments = splitCommandSegments("diff <(ls a) <(ls b)");
-	const nonEmpty = segments.filter(Boolean);
-	assert.equal(nonEmpty.length, 1);
-});
-
-test("does split on $(...) — command substitution is a separate segment", () => {
-	const segments = splitCommandSegments("echo $(whoami)");
-	const nonEmpty = segments.filter(Boolean);
-	assert.equal(nonEmpty.length, 2);
-	assert.equal(nonEmpty[1], "whoami");
-});
-
-test(">(...) target not falsely detected as file-manipulation", () => {
-	// Before the fix for >(...), the > would be treated as a redirect and
-	// `cat .git/HEAD` could appear as a separate segment. Verify it's
-	// correctly kept as an argument of the parent command.
-	assert.equal(
-		findBannedFolderTarget("env cat <(ls) >(cat .git/HEAD)", BANNED_FOLDERS),
-		null,
-	);
 });
