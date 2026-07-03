@@ -1181,6 +1181,41 @@ async function fetchCommentsForReview(
 }
 
 // ---------------------------------------------------------------------------
+// Re-request review from previous changes-requested reviewer
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the reviewer who most recently requested changes on the PR.
+ *
+ * Only considers reviews that are NOT against the current HEAD — these are
+ * the reviews whose feedback we're now addressing with new commits.
+ * Returns null if no such review exists (e.g. first push, or already approved).
+ */
+export async function getLatestChangesRequestedReviewer(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<string | null> {
+	const prNumber = await detectPrNumber(cwd, signal);
+	if (!prNumber) return null;
+
+	const headSha = (await getHeadSha(cwd, signal))?.trim() ?? "";
+
+	const reviews = await fetchPrReviews(cwd, prNumber, signal);
+
+	// Find the most recent CHANGES_REQUESTED review that is NOT against the
+	// current HEAD (i.e. it was submitted before our latest push). Reviews
+	// against the current HEAD are new — not something we're fixing.
+	const staleChangesRequested = reviews
+		.filter((r) => r.state === "CHANGES_REQUESTED")
+		.filter((r) => r.commitId && r.commitId !== headSha)
+		.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+
+	if (staleChangesRequested.length === 0) return null;
+
+	return staleChangesRequested[0].author;
+}
+
+// ---------------------------------------------------------------------------
 // Review polling
 // ---------------------------------------------------------------------------
 
