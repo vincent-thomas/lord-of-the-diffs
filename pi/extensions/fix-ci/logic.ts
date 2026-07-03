@@ -1169,7 +1169,7 @@ async function fetchReviewComments(
 ): Promise<ReviewComment[]> {
 	try {
 		const { stdout } = await execAsync(
-			`gh api repos/{owner}/{repo}/pulls/${prNumber}/comments`,
+			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/comments`,
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
