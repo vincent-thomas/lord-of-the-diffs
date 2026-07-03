@@ -358,10 +358,15 @@ test("allows git on a subcommand basis", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
 		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
-		["rev-parse"], ["merge-base"], ["commit"], ["rm"],
+		["rev-parse"], ["merge-base"], ["rm"],
 	]);
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
 	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
+});
+
+test("git commit is banned and points to the git_commit tool", () => {
+	assert.equal(findEntry("git commit")?.status, CommandPolicyStatus.Banned);
+	assert.match(findEntry("git commit")?.description ?? "", /Use the git_commit tool/);
 });
 
 test("can explicitly ban entries with model guidance", () => {

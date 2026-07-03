@@ -90,7 +90,6 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
     ["restore"],
     ["rev-parse"],
     ["merge-base"],
-    ["commit"],
     ["rm"]
   ] },
 	{
@@ -99,5 +98,12 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 		command: "git",
 		subcommand: [["checkout"]],
 		bannedFlags: ["-b", "-B", "--orphan"],
+	},
+	{
+		name: "git commit",
+		status: CommandPolicyStatus.Banned,
+		command: "git",
+		subcommand: [["commit"]],
+		description: "Use the git_commit tool instead — it runs pre-commit checks and validates branch state before committing.",
 	},
 ];
