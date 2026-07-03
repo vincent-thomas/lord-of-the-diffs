@@ -10,6 +10,32 @@ import { execAsync } from "./exec-async.ts";
 import { commandInvocation, splitCommandSegments } from "./command-utils.ts";
 
 // ---------------------------------------------------------------------------
+// Working tree checks
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether the working tree has uncommitted changes (unstaged or
+ * untracked). Returns true if dirty, false if clean. When git fails (e.g.
+ * not in a repo), errs on the side of caution and returns true.
+ */
+export async function isWorktreeDirty(
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<boolean> {
+	try {
+		const { stdout } = await execAsync("git status --porcelain", {
+			cwd,
+			timeout: 10_000,
+			signal,
+		});
+		return stdout.trim().length > 0;
+	} catch {
+		// If git fails, err on the side of caution — assume dirty.
+		return true;
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Branch helpers
 // ---------------------------------------------------------------------------
 

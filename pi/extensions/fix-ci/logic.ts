@@ -68,32 +68,6 @@ export async function gitPush(cwd: string, signal?: AbortSignal): Promise<PushRe
 }
 
 // ---------------------------------------------------------------------------
-// Dirty working tree check
-// ---------------------------------------------------------------------------
-
-/**
- * Check if the working tree has uncommitted changes (modified, unstaged, or
- * untracked files). Returns true if dirty, false if clean.
- */
-export async function hasDirtyWorkingTree(
-	cwd: string,
-	signal?: AbortSignal,
-): Promise<boolean> {
-	try {
-		// `git status --porcelain` returns empty output when the tree is clean.
-		const { stdout } = await execAsync("git status --porcelain", {
-			cwd,
-			timeout: 10_000,
-			signal,
-		});
-		return stdout.trim().length > 0;
-	} catch {
-		// If git fails, err on the side of caution — assume dirty.
-		return true;
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Check mode detection
 // ---------------------------------------------------------------------------
 
@@ -496,17 +470,6 @@ export function trimLog(log: string, maxLines: number): string {
 	if (lines.length <= maxLines) return log;
 	return `… (${lines.length - maxLines} lines trimmed) …\n` + lines.slice(-maxLines).join("\n");
 }
-
-// ---------------------------------------------------------------------------
-// Git push detection — re-exported from shared lib
-// ---------------------------------------------------------------------------
-
-export {
-	isGitPushLine,
-	findGitPushInText,
-	findGitPushInScript,
-	extractScriptPaths,
-} from "../../lib/git-utils.ts";
 
 // ---------------------------------------------------------------------------
 // PR conflict detection & resolution
@@ -1165,11 +1128,13 @@ export interface ReviewResult {
 
 async function fetchPrReviews(
 	cwd: string,
+	prNumber: number | null,
 	signal?: AbortSignal,
 ): Promise<Review[]> {
+	if (!prNumber) return [];
 	try {
 		const { stdout } = await execAsync(
-			"gh pr view --json reviews --jq '.reviews'",
+			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/reviews`,
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
@@ -1187,21 +1152,23 @@ async function fetchPrReviews(
 	}
 }
 
-async function fetchReviewComments(
+async function fetchCommentsForReview(
 	cwd: string,
-	prNumber: number,
+	prNumber: number | null,
+	reviewId: number,
 	signal?: AbortSignal,
 ): Promise<ReviewComment[]> {
+	if (!prNumber) return [];
 	try {
 		const { stdout } = await execAsync(
-			`gh api repos/{owner}/{repo}/pulls/${prNumber}/comments`,
+			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/reviews/${reviewId}/comments`,
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
 		const raw = JSON.parse(stdout.trim());
 		return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
 			id: c.id as number,
-			pullRequestReviewId: c.pull_request_review_id as number,
+			pullRequestReviewId: reviewId,
 			path: c.path as string ?? "",
 			line: c.line as number ?? null,
 			body: c.body as string ?? "",
@@ -1242,6 +1209,7 @@ export async function waitForReview(
 	// Capture the PR's HEAD SHA at the start. Reviews submitted against
 	// an older commit (before new pushes) are stale and should be ignored.
 	const headSha = ((await getHeadSha(cwd, signal)) ?? "").trim();
+	const prNumber = await detectPrNumber(cwd, signal);
 
 	while (polls < MAX_REVIEW_POLLS) {
 		if (signal?.aborted) {
@@ -1250,7 +1218,7 @@ export async function waitForReview(
 
 		polls++;
 
-		const reviews = await fetchPrReviews(cwd, signal);
+		const reviews = await fetchPrReviews(cwd, prNumber, signal);
 		// Filter out DISMISSED and stale reviews (submitted against an older commit).
 		const active = reviews.filter((r) => {
 			if (r.state === "DISMISSED") return false;
@@ -1269,8 +1237,6 @@ export async function waitForReview(
 			a.submittedAt > b.submittedAt ? a : b,
 		);
 
-		const prNumber = await detectPrNumber(cwd, signal);
-
 		switch (latest.state) {
 			case "APPROVED": {
 				onStatus?.(`PR approved by @${latest.author}.`);
@@ -1286,12 +1252,9 @@ export async function waitForReview(
 				onStatus?.(
 					`Changes requested by @${latest.author}. Fetching review comments…`,
 				);
-				const allComments = prNumber
-					? await fetchReviewComments(cwd, prNumber, signal)
-					: [];
-				// Only comments submitted as part of this specific review.
-				const linkedComments = allComments.filter(
-					(c) => c.pullRequestReviewId === latest.id,
+				// Fetch comments linked to this specific review directly.
+				const linkedComments = await fetchCommentsForReview(
+					cwd, prNumber, latest.id, signal,
 				);
 				return {
 					decision: "changes_requested",

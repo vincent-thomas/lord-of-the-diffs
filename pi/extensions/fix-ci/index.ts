@@ -10,18 +10,15 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { currentBranch } from "../../lib/git-utils.ts";
+import { currentBranch, isWorktreeDirty, isGitPushLine, findGitPushInText, findGitPushInScript, extractScriptPaths } from "../../lib/git-utils.ts";
 import {
   gitPush,
   getHeadSha,
   hasUnpushedCommits,
-  hasDirtyWorkingTree,
+  isWorktreeDirty,
   pollChecks,
   fetchFailureLogs,
   isFailure,
-  findGitPushInText,
-  findGitPushInScript,
-  extractScriptPaths,
   getPrBaseBranch,
   mergeBaseBranchIntoCurrent,
   needsPullBeforePush,
@@ -67,7 +64,7 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: "Checking for uncommitted changes…" }],
       });
 
-      if (await hasDirtyWorkingTree(cwd, signal)) {
+      if (await isWorktreeDirty(cwd, signal)) {
         return {
           content: [
             {
