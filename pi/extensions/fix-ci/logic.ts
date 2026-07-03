@@ -8,7 +8,7 @@
  * kills child processes promptly.
  */
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
-import { hasUpstream, currentBranch, isWorktreeDirty } from "../../lib/git-utils.ts";
+import { hasUpstream, currentBranch } from "../../lib/git-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Types
