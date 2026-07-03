@@ -1139,6 +1139,7 @@ export interface Review {
 	state: string; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING
 	body: string;
 	submittedAt: string;
+	commitId: string | null; // SHA the review was submitted against; null if unknown
 }
 
 export interface ReviewComment {
@@ -1179,6 +1180,7 @@ async function fetchPrReviews(
 			state: r.state as string ?? "UNKNOWN",
 			body: r.body as string ?? "",
 			submittedAt: r.submitted_at as string ?? "",
+			commitId: (r.commit_id as string) ?? null,
 		}));
 	} catch {
 		return [];
@@ -1221,10 +1223,14 @@ const REVIEW_POLL_INTERVAL_MS = 30_000;
  * Poll for PR reviews until a decision is reached (approved or changes
  * requested). Times out after MAX_REVIEW_POLLS polls.
  *
- * - APPROVED → returns immediately (auto-merge should handle the rest)
+ * Reviews submitted against an older commit (before the current HEAD) are
+ * treated as stale and ignored — only reviews against the current HEAD are
+ * considered active.
+ *
+ * - APPROVED → returns immediately
  * - CHANGES_REQUESTED → fetches inline comments linked to that review
  * - COMMENTED (no decision yet) → logs via onStatus, keeps polling
- * - PENDING / no reviews → logs via onStatus, keeps polling
+ * - PENDING / no active reviews → logs via onStatus, keeps polling
  */
 export async function waitForReview(
 	cwd: string,
@@ -1232,6 +1238,10 @@ export async function waitForReview(
 	onStatus?: (msg: string) => void,
 ): Promise<ReviewResult> {
 	let polls = 0;
+
+	// Capture the PR's HEAD SHA at the start. Reviews submitted against
+	// an older commit (before new pushes) are stale and should be ignored.
+	const headSha = ((await getHeadSha(cwd, signal)) ?? "").trim();
 
 	while (polls < MAX_REVIEW_POLLS) {
 		if (signal?.aborted) {
@@ -1241,16 +1251,21 @@ export async function waitForReview(
 		polls++;
 
 		const reviews = await fetchPrReviews(cwd, signal);
-		const nonDismissed = reviews.filter((r) => r.state !== "DISMISSED");
+		// Filter out DISMISSED and stale reviews (submitted against an older commit).
+		const active = reviews.filter((r) => {
+			if (r.state === "DISMISSED") return false;
+			if (headSha && r.commitId && r.commitId !== headSha) return false;
+			return true;
+		});
 
-		if (nonDismissed.length === 0) {
+		if (active.length === 0) {
 			onStatus?.(`Poll ${polls}/${MAX_REVIEW_POLLS}: awaiting reviewer assignment…`);
 			await sleep(REVIEW_POLL_INTERVAL_MS, signal);
 			continue;
 		}
 
-		// Find the most recent non-dismissed review by submittedAt.
-		const latest = nonDismissed.reduce((a, b) =>
+		// Find the most recent active review by submittedAt.
+		const latest = active.reduce((a, b) =>
 			a.submittedAt > b.submittedAt ? a : b,
 		);
 
