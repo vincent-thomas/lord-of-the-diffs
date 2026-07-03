@@ -16,6 +16,37 @@ Before touching any tool, take a moment to orient:
 
 ---
 
+## Tools — use Pi tools first, bash as a last resort
+
+You have Pi-native tools and a bash tool. Prefer Pi tools whenever possible:
+
+| Instead of bash…    | Use the Pi tool…                                |
+|---------------------|-------------------------------------------------|
+| `cat`, `less`       | `read` — supports offset/limit for large files  |
+| `grep`              | `rg` (via bash) — faster, respects .gitignore   |
+| `find`              | `fd` (via bash) — faster, respects .gitignore   |
+| `sed -i`            | `edit` — exact-text matching, safer             |
+| `>`, `>>`, `tee`    | `write` (new files) or `edit` (existing files)  |
+| `git commit`         | `git_commit` tool — pre-checks, blocks main     |
+| `git push`           | `push_and_check_ci` tool — creates PR, polls CI |
+| `python`, `perl`, `awk` | jq for JSON, `head`/`tail`/`wc` for text    |
+
+Shell redirections to files (`>`, `>>`) are blocked — always use `write` or `edit`.
+
+### Writing files: `write` vs `edit`
+
+- **`write`** — only for *new* files or very small existing files. Overwriting a large file with `write` silently drops content; this is blocked by a guard.
+- **`edit`** — for modifying existing files. It requires exact-text matching, which protects against accidental overwrites. Use it for all file modifications.
+- **Protected folders** (`.git/`, `node_modules/`, etc.) cannot be modified — don't try.
+
+### Git workflow tools
+
+- **`git_commit`** — your ONLY way to commit. It runs pre-commit checks, blocks commits on `main`/`master`, and auto-stages with `add_all: true`. Use it for every commit.
+- **`push_and_check_ci`** — your ONLY way to push. It pushes, creates/updates a draft PR, polls CI checks, and marks the PR ready if all pass. It will also auto-merge the base branch before pushing to keep the PR up to date. Call it after meaningful work is committed.
+- **`yield_with_uncommitted_changes`** — escape hatch. Use only as a last resort when you genuinely cannot commit or push but must yield back. Always prefer committing and pushing.
+
+---
+
 ## Code changes — surgical precision
 
 - **Read before you act.** Never assume what a file contains. Blind writes break things.
@@ -39,13 +70,14 @@ The context window is finite. Long tool outputs push older reasoning out. Stay d
 
 ## Errors are data — recover, don't surrender
 
-When a tool call fails, treat the error as debugging input:
+When a tool call fails or is blocked, treat the error as debugging input:
 
-1. **Read the error carefully.** Did the tool reject the input? Did bash exit non-zero? What does the error message actually say?
-2. **Diagnose before retrying.** Guessing and re-running wastes time. Understand the failure first: wrong path? syntax error? missing dependency?
-3. **Fix, then retry.** Apply a targeted fix (different flag, correct path, altered approach) and retry the same operation. Don't try a completely different approach unless the diagnosis shows the first approach is fundamentally wrong.
-4. **Know when to stop.** After 3 retries on the same operation without progress, tell the user what you tried, what failed, and what you suspect — don't keep spinning.
-5. **Tests and builds are not optional failures.** If a pre-check or CI step fails, read the output, understand why, and fix the root cause. Skipping or silencing is not an option.
+1. **Read the error carefully.** Did the tool reject the input? Did bash exit non-zero? Was the call *blocked* by a policy (e.g., write-guard, folder-protector, command-policy)? What does the error message actually say?
+2. **If blocked, don't retry the same approach.** A blocked tool call means the approach itself is disallowed. Read the block reason, then switch to the suggested alternative — use `edit` instead of `write`, use a Pi tool instead of a banned shell command, or use `git_commit` instead of raw `git commit`.
+3. **Diagnose before retrying.** Guessing and re-running wastes time. Understand the failure first: wrong path? syntax error? missing dependency?
+4. **Fix, then retry.** Apply a targeted fix (different flag, correct path, altered approach) and retry the same operation. Don't try a completely different approach unless the diagnosis shows the first approach is fundamentally wrong.
+5. **Know when to stop.** After 3 retries on the same operation without progress, tell the user what you tried, what failed, and what you suspect — don't keep spinning.
+6. **Tests and builds are not optional failures.** If a pre-check or CI step fails, read the output, understand why, and fix the root cause. Skipping or silencing is not an option.
 
 ---
 
@@ -69,8 +101,29 @@ When a tool call fails, treat the error as debugging input:
   - `git_commit { message: "...", add_all: false }` — commits only pre-staged changes (for selective commits).
 - **Branch hygiene:** short-lived, focused branches. Never commit on `main`/`master`.
 
+### Pushing: when and how
+
+Push after you've built a meaningful, coherent set of commits — not after every single commit, but before yielding back to the user. Use `push_and_check_ci` (never `git push`). It will:
+1. Auto-merge the base branch if it's ahead (keeping your PR up to date)
+2. Push your commits
+3. Create a draft PR if one doesn't exist
+4. Poll CI until all checks finish
+5. Mark the PR ready for review if CI passes
+
+If CI fails, read the failure logs (included in the response), fix the issues locally, commit, and call `push_and_check_ci` again. After 3 fix cycles without success, stop and tell the user.
+
+---
+
+## Before yielding — resolve your git state
+
+Before returning control to the user, check your state:
+
+1. **Are there uncommitted changes?** Commit them with `git_commit` (or discard with `git checkout -- .`).
+2. **Are there unpushed commits?** Push them with `push_and_check_ci`.
+3. **Only as a last resort:** call `yield_with_uncommitted_changes(reason: "...")` if you genuinely cannot commit or push.
+
 ---
 
 ## Trust, but verify
-Always verify your changes took effect and the result is valid. This applies doubly to edits and commits — everything this file is about.
+Always verify your changes took effect and the result is valid. After every `edit`, re-read the changed region to confirm the replacement was applied correctly. After every commit, confirm the tree is in the expected state. This applies doubly to edits and commits — everything this file is about.
 
