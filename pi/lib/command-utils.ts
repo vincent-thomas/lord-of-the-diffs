@@ -108,7 +108,7 @@ export function splitCommandSegments(text: string): string[] {
 				// Command substitution $(...) — extract the content as a segment.
 				pushCurrent();
 			}
-			// For process substitution <(...), the content is an argument — don't push.
+			// For process substitution <(...) and >(...), the content is an argument — don't push.
 			continue;
 		}
 
@@ -129,6 +129,14 @@ export function splitCommandSegments(text: string): string[] {
 			// Process substitution <(...) — not a redirect, treat as part of segment.
 			current += "<(";
 			substStack.push("<");
+			i++;
+			continue;
+		}
+
+		if (ch === ">" && next === "(") {
+			// Process substitution >(...) — not a redirect, treat as part of segment.
+			current += ">(";
+			substStack.push(">");
 			i++;
 			continue;
 		}
