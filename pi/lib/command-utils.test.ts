@@ -71,30 +71,38 @@ test("splits on $(...) — extracts content as segment", () => {
 test("splits on nested $(...)", () => {
 	const segs = splitCommandSegments("echo $(echo $(whoami))");
 	const nonEmpty = segs.filter(Boolean);
-	assert.equal(nonEmpty.length, 2);
-	assert.equal(nonEmpty[0], "echo");
-	assert.equal(nonEmpty[1], "echo $(whoami)");
+	assert.equal(nonEmpty.length, 3);
+	assert.ok(nonEmpty[0].includes("echo"));
+	assert.ok(nonEmpty[1].includes("echo"));
+	assert.equal(nonEmpty[2], "whoami");
 });
 
 // ── Redirection — must split ────────────────────────────────────────────────
 
-test("splits on > file redirection", () => {
+// Note: redirection *targets* are skipped (they are file paths, not commands).
+// The segment containing the command before the redirect is still emitted.
+
+test("splits on > — emits command, skips target", () => {
 	const segs = splitCommandSegments("echo hi > out.txt");
 	const nonEmpty = segs.filter(Boolean);
-	assert.equal(nonEmpty.length, 2);
+	assert.equal(nonEmpty.length, 1);
 	assert.ok(nonEmpty[0].includes("echo hi"));
 });
 
-test("splits on >> append redirection", () => {
+test("splits on >> — emits command, skips target", () => {
 	const segs = splitCommandSegments("echo hi >> log.txt");
 	const nonEmpty = segs.filter(Boolean);
-	assert.equal(nonEmpty.length, 2);
+	assert.equal(nonEmpty.length, 1);
+	assert.ok(nonEmpty[0].includes("echo hi"));
 });
 
-test("splits on fd-prefixed redirection", () => {
+test("splits on fd-prefixed redirect — strips fd, emits command, skips target", () => {
 	const segs = splitCommandSegments("cmd 2> err.log");
 	const nonEmpty = segs.filter(Boolean);
-	assert.equal(nonEmpty.length, 2);
+	assert.equal(nonEmpty.length, 1);
+	assert.ok(nonEmpty[0].includes("cmd"));
+	// FD number should be stripped
+	assert.ok(!nonEmpty[0].includes("2"));
 });
 
 // ── Quoted strings ──────────────────────────────────────────────────────────
