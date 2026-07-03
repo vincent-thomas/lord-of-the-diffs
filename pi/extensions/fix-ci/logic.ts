@@ -1140,11 +1140,13 @@ export interface ReviewResult {
 
 async function fetchPrReviews(
 	cwd: string,
+	prNumber: number | null,
 	signal?: AbortSignal,
 ): Promise<Review[]> {
+	if (!prNumber) return [];
 	try {
 		const { stdout } = await execAsync(
-			"gh pr view --json reviews --jq '.reviews'",
+			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/reviews`,
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
@@ -1219,6 +1221,7 @@ export async function waitForReview(
 	// Capture the PR's HEAD SHA at the start. Reviews submitted against
 	// an older commit (before new pushes) are stale and should be ignored.
 	const headSha = ((await getHeadSha(cwd, signal)) ?? "").trim();
+	const prNumber = await detectPrNumber(cwd, signal);
 
 	while (polls < MAX_REVIEW_POLLS) {
 		if (signal?.aborted) {
@@ -1227,7 +1230,7 @@ export async function waitForReview(
 
 		polls++;
 
-		const reviews = await fetchPrReviews(cwd, signal);
+		const reviews = await fetchPrReviews(cwd, prNumber, signal);
 		// Filter out DISMISSED and stale reviews (submitted against an older commit).
 		const active = reviews.filter((r) => {
 			if (r.state === "DISMISSED") return false;
@@ -1245,8 +1248,6 @@ export async function waitForReview(
 		const latest = active.reduce((a, b) =>
 			a.submittedAt > b.submittedAt ? a : b,
 		);
-
-		const prNumber = await detectPrNumber(cwd, signal);
 
 		switch (latest.state) {
 			case "APPROVED": {
