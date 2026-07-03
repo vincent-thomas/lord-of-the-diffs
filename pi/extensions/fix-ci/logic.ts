@@ -1162,21 +1162,23 @@ async function fetchPrReviews(
 	}
 }
 
-async function fetchReviewComments(
+async function fetchCommentsForReview(
 	cwd: string,
-	prNumber: number,
+	prNumber: number | null,
+	reviewId: number,
 	signal?: AbortSignal,
 ): Promise<ReviewComment[]> {
+	if (!prNumber) return [];
 	try {
 		const { stdout } = await execAsync(
-			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/comments`,
+			`gh api --paginate repos/{owner}/{repo}/pulls/${prNumber}/reviews/${reviewId}/comments`,
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
 		const raw = JSON.parse(stdout.trim());
 		return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
 			id: c.id as number,
-			pullRequestReviewId: c.pull_request_review_id as number,
+			pullRequestReviewId: reviewId,
 			path: c.path as string ?? "",
 			line: c.line as number ?? null,
 			body: c.body as string ?? "",
@@ -1261,12 +1263,9 @@ export async function waitForReview(
 				onStatus?.(
 					`Changes requested by @${latest.author}. Fetching review comments…`,
 				);
-				const allComments = prNumber
-					? await fetchReviewComments(cwd, prNumber, signal)
-					: [];
-				// Only comments submitted as part of this specific review.
-				const linkedComments = allComments.filter(
-					(c) => c.pullRequestReviewId === latest.id,
+				// Fetch comments linked to this specific review directly.
+				const linkedComments = await fetchCommentsForReview(
+					cwd, prNumber, latest.id, signal,
 				);
 				return {
 					decision: "changes_requested",
