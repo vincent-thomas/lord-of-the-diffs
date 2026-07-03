@@ -10,12 +10,18 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { currentBranch, isWorktreeDirty, isGitPushLine, findGitPushInText, findGitPushInScript, extractScriptPaths } from "../../lib/git-utils.ts";
+import {
+  currentBranch,
+  isWorktreeDirty,
+  isGitPushLine,
+  findGitPushInText,
+  findGitPushInScript,
+  extractScriptPaths,
+} from "../../lib/git-utils.ts";
 import {
   gitPush,
   getHeadSha,
   hasUnpushedCommits,
-  isWorktreeDirty,
   pollChecks,
   fetchFailureLogs,
   isFailure,
@@ -219,8 +225,7 @@ export default function (pi: ExtensionAPI) {
             content: [
               {
                 type: "text",
-                text:
-                  `Remote and local have diverged — pulling changes via merge (non-history-rewriting)…`,
+                text: `Remote and local have diverged — pulling changes via merge (non-history-rewriting)…`,
               },
             ],
           });
@@ -383,8 +388,7 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text:
-                `✅ Pull request was already merged. Nothing more to do.`,
+              text: `✅ Pull request was already merged. Nothing more to do.`,
             },
           ],
           details: { prMerged: true },
@@ -508,18 +512,12 @@ export default function (pi: ExtensionAPI) {
 
           // ── Wait for review ──────────────────────────────────
           onUpdate?.({
-            content: [
-              { type: "text", text: "Waiting for review…" },
-            ],
+            content: [{ type: "text", text: "Waiting for review…" }],
           });
 
-          const reviewResult = await waitForReview(
-            cwd,
-            signal,
-            (status) => {
-              onUpdate?.({ content: [{ type: "text", text: status }] });
-            },
-          );
+          const reviewResult = await waitForReview(cwd, signal, (status) => {
+            onUpdate?.({ content: [{ type: "text", text: status }] });
+          });
 
           if (reviewResult.decision === "changes_requested") {
             return {
@@ -745,9 +743,11 @@ function formatChangesRequested(result: ReviewResult): string {
     lines.push("### Inline comments");
     lines.push("");
     for (const c of result.comments) {
-      const location = c.line
-        ? `\`${c.path}:${c.line}\``
-        : `\`${c.path}\``;
+      const location = c.startLine
+        ? `\`${c.path}:L${c.startLine}-L${c.line}\``
+        : c.line
+          ? `\`${c.path}:${c.line}\``
+          : `\`${c.path}\``;
       lines.push(`- ${location} — ${c.body.replace(/\n/g, " ")}`);
     }
     lines.push("");
