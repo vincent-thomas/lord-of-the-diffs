@@ -15,7 +15,7 @@ import {
   gitPush,
   getHeadSha,
   hasUnpushedCommits,
-  hasDirtyWorkingTree,
+  isWorktreeDirty,
   pollChecks,
   fetchFailureLogs,
   isFailure,
@@ -67,7 +67,7 @@ export default function (pi: ExtensionAPI) {
         content: [{ type: "text", text: "Checking for uncommitted changes…" }],
       });
 
-      if (await hasDirtyWorkingTree(cwd, signal)) {
+      if (await isWorktreeDirty(cwd, signal)) {
         return {
           content: [
             {

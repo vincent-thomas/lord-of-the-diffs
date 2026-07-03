@@ -67,9 +67,6 @@ export async function gitPush(cwd: string, signal?: AbortSignal): Promise<PushRe
 	}
 }
 
-// Re-export for callers that import from this module.
-export { isWorktreeDirty };
-
 // ---------------------------------------------------------------------------
 // Check mode detection
 // ---------------------------------------------------------------------------
@@ -479,7 +476,7 @@ export function trimLog(log: string, maxLines: number): string {
 // ---------------------------------------------------------------------------
 
 export {
-	isWorktreeDirty as hasDirtyWorkingTree,
+	isWorktreeDirty,
 	isGitPushLine,
 	findGitPushInText,
 	findGitPushInScript,
