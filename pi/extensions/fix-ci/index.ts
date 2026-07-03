@@ -36,6 +36,8 @@ import {
   createDraftPr,
   getPrState,
   markPrReady,
+  addReviewers,
+  getLatestChangesRequestedReviewer,
   waitForReview,
   MAX_REVIEW_POLLS,
   type CheckResult,
@@ -508,6 +510,29 @@ export default function (pi: ExtensionAPI) {
               "",
               `⚠️ Could not mark PR #${prNum} as ready (may already be ready).`,
             );
+          }
+
+          // ── Re-request review from previous reviewer ──────────
+          const previousReviewer = await getLatestChangesRequestedReviewer(
+            cwd,
+            signal,
+          );
+          if (previousReviewer) {
+            onUpdate?.({
+              content: [
+                {
+                  type: "text",
+                  text: `Re-requesting review from @${previousReviewer} (previously requested changes)…`,
+                },
+              ],
+            });
+            const reRequested = await addReviewers(cwd, previousReviewer, signal);
+            if (reRequested) {
+              successLines.push(
+                "",
+                `📨 Re-requested review from @${previousReviewer}.`,
+              );
+            }
           }
 
           // ── Wait for review ──────────────────────────────────
