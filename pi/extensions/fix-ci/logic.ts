@@ -472,18 +472,6 @@ export function trimLog(log: string, maxLines: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Git push detection — re-exported from shared lib
-// ---------------------------------------------------------------------------
-
-export {
-	isWorktreeDirty,
-	isGitPushLine,
-	findGitPushInText,
-	findGitPushInScript,
-	extractScriptPaths,
-} from "../../lib/git-utils.ts";
-
-// ---------------------------------------------------------------------------
 // PR conflict detection & resolution
 // ---------------------------------------------------------------------------
 

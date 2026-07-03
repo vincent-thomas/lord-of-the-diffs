@@ -7,9 +7,6 @@ import assert from "node:assert/strict";
 import { test, suite } from "node:test";
 import {
 	isFailure,
-	isGitPushLine,
-	findGitPushInText,
-	extractScriptPaths,
 	mapCheckRun,
 	mapStatusState,
 	allSuitesComplete,
@@ -18,6 +15,11 @@ import {
 	extractRunId,
 	trimLog,
 } from "./logic.ts";
+import {
+	isGitPushLine,
+	findGitPushInText,
+	extractScriptPaths,
+} from "../../lib/git-utils.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";

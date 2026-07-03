@@ -10,7 +10,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { currentBranch } from "../../lib/git-utils.ts";
+import { currentBranch, isWorktreeDirty, isGitPushLine, findGitPushInText, findGitPushInScript, extractScriptPaths } from "../../lib/git-utils.ts";
 import {
   gitPush,
   getHeadSha,
@@ -19,9 +19,6 @@ import {
   pollChecks,
   fetchFailureLogs,
   isFailure,
-  findGitPushInText,
-  findGitPushInScript,
-  extractScriptPaths,
   getPrBaseBranch,
   mergeBaseBranchIntoCurrent,
   needsPullBeforePush,
