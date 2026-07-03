@@ -1171,6 +1171,7 @@ async function fetchCommentsForReview(
 			pullRequestReviewId: reviewId,
 			path: c.path as string ?? "",
 			line: c.line as number ?? null,
+			startLine: (c.start_line as number) ?? null,
 			body: c.body as string ?? "",
 			author: (c.user as Record<string, unknown>)?.login as string ?? "unknown",
 		}));
