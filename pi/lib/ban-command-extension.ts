@@ -60,9 +60,10 @@ export function createCommandPolicyExtension(options: CommandPolicyOptions) {
 					return {
 						block: true,
 						reason:
-							`Command name or flag is wrapped in pointless quotes (blocked: \`${use.segment}\`) — ` +
-							`e.g. \`"git"\` or \`"-rf"\` run identically to \`git\` or \`-rf\` but hide from the ` +
-							`command policy. Rewrite the command without quoting the command name or flags.`,
+							`Command name or flag is pointlessly quoted or backslash-escaped ` +
+							`(blocked: \`${use.segment}\`) — e.g. \`"git"\`, \`\\-rf\`, or \`g""it\` run identically ` +
+							`to \`git\` or \`-rf\` but hide from the command policy. Rewrite the command with the ` +
+							`command name and flags written plainly, with no quotes or backslashes.`,
 					};
 				}
 

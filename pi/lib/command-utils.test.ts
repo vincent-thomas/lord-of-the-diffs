@@ -8,8 +8,8 @@ import {
 	commandInvocation,
 	leadingCommand,
 	findCommandUse,
-	isPointlessQuoting,
-	isQuoteDisguisedFlag,
+	isPointlessEscaping,
+	isDisguisedFlag,
 	hasDisguisedFlag,
 	OBFUSCATED,
 } from "./command-utils.ts";
@@ -163,15 +163,19 @@ test("resolves through env to real command", () => {
 	assert.equal(resolved("env ls -la").name, "ls");
 });
 
-// ── commandInvocation — OBFUSCATED (quoted command name / flag) ────────────
+// ── commandInvocation — OBFUSCATED (disguised command name / flag) ─────────
 //
 // Detection lives at the parser step (here) rather than in individual policy
 // consumers: a bareword command name or flag has no legitimate reason to be
-// wrapped in quotes — `"git"` and `"-rf"` run identically to `git` and
-// `-rf` once the shell strips the quotes, so quoting only serves to dodge
-// string-based checks. commandInvocation returns the OBFUSCATED sentinel
-// (distinct from `null`, which means "nothing runs here") so every caller
-// is forced to handle it explicitly instead of silently skipping it.
+// quoted or backslash-escaped — `"git"`, `g\it`, and `g""it` all run
+// identically to `git` once the shell resolves them, so doing so only
+// serves to dodge string-based checks. commandInvocation returns the
+// OBFUSCATED sentinel (distinct from `null`, which means "nothing runs
+// here") so every caller is forced to handle it explicitly instead of
+// silently skipping it. This isn't limited to whole-token quote pairs —
+// backslash-escapes and quote/plain concatenation are resolved too, since
+// assuming obfuscation only looks like quotes would leave the rest of that
+// space open.
 
 suite("commandInvocation — OBFUSCATED");
 
@@ -197,6 +201,34 @@ test("quoted flag after a wrapper is obfuscated", () => {
 
 test("path-prefixed quoted command name is obfuscated", () => {
 	assert.equal(commandInvocation('"/bin/rm" -rf /'), OBFUSCATED);
+});
+
+test("backslash-per-character command name is obfuscated", () => {
+	assert.equal(commandInvocation("g\\it commit -m x"), OBFUSCATED);
+});
+
+test("backslash-escaped flag is obfuscated", () => {
+	assert.equal(commandInvocation("rm \\-rf dir/"), OBFUSCATED);
+});
+
+test("backslash-escaped wrapper name is obfuscated", () => {
+	assert.equal(commandInvocation("s\\udo git push"), OBFUSCATED);
+});
+
+test("concatenated quote+plain command name is obfuscated", () => {
+	assert.equal(commandInvocation('g""it commit -m x'), OBFUSCATED);
+});
+
+test("concatenated quote+plain flag is obfuscated", () => {
+	assert.equal(commandInvocation("rm '-r'f dir/"), OBFUSCATED);
+});
+
+test("single leading backslash (alias-busting idiom) is NOT obfuscated", () => {
+	// \cat is a well-known idiom for bypassing shell aliases, not an
+	// evasion attempt — commandInvocation resolves it to a plain "cat".
+	const inv = commandInvocation("\\cat file");
+	assert.ok(inv && inv !== OBFUSCATED);
+	assert.equal(inv.name, "cat");
 });
 
 test("quoted commit message is NOT obfuscated — legitimate value quoting", () => {
@@ -255,73 +287,114 @@ test("clean non-matching segment still returns null", () => {
 	assert.equal(findCommandUse("ls -la", new Set(["git"])), null);
 });
 
-// ── isPointlessQuoting ───────────────────────────────────────────────────────
+// ── isPointlessEscaping ──────────────────────────────────────────────────────
+//
+// Generalizes past "wrapped in a matching quote pair" — a shell resolves
+// backslash-escapes and concatenated quoted/plain/escaped fragments to the
+// exact same literal value, so all of those forms need to be caught, not
+// just whole-token quoting.
 
-suite("isPointlessQuoting");
+suite("isPointlessEscaping");
 
 test("quoted bareword is pointless", () => {
-	assert.equal(isPointlessQuoting('"git"'), true);
-	assert.equal(isPointlessQuoting("'rm'"), true);
+	assert.equal(isPointlessEscaping('"git"'), true);
+	assert.equal(isPointlessEscaping("'rm'"), true);
+});
+
+test("backslash-per-character bareword is pointless", () => {
+	assert.equal(isPointlessEscaping("g\\it"), true);
+});
+
+test("concatenated quote+plain bareword is pointless", () => {
+	assert.equal(isPointlessEscaping('g""it'), true);
+	assert.equal(isPointlessEscaping("'g'it"), true);
 });
 
 test("quoted value with whitespace is not pointless", () => {
-	assert.equal(isPointlessQuoting('"fix bug"'), false);
+	assert.equal(isPointlessEscaping('"fix bug"'), false);
 });
 
 test("quoted value with shell metacharacters is not pointless", () => {
-	assert.equal(isPointlessQuoting('"a && b"'), false);
-	assert.equal(isPointlessQuoting('"$(whoami)"'), false);
+	assert.equal(isPointlessEscaping('"a && b"'), false);
+	assert.equal(isPointlessEscaping('"$(whoami)"'), false);
 });
 
-test("mismatched quotes are not pointless quoting", () => {
-	assert.equal(isPointlessQuoting("\"git'"), false);
+test("mismatched quotes are not pointless (unresolvable, not a signal either way)", () => {
+	assert.equal(isPointlessEscaping("\"git'"), false);
 });
 
-test("empty quotes are not pointless quoting", () => {
-	assert.equal(isPointlessQuoting('""'), false);
+test("empty quotes are not pointless (nothing resolved)", () => {
+	assert.equal(isPointlessEscaping('""'), false);
 });
 
-test("unquoted token is not pointless quoting", () => {
-	assert.equal(isPointlessQuoting("git"), false);
+test("unescaped token is not pointless (nothing to resolve)", () => {
+	assert.equal(isPointlessEscaping("git"), false);
 });
 
-// ── isQuoteDisguisedFlag / hasDisguisedFlag ─────────────────────────────────
+test("single leading backslash (alias-busting idiom) is exempted", () => {
+	assert.equal(isPointlessEscaping("\\cat"), false);
+});
+
+test("dangling trailing backslash is not pointless (unresolvable)", () => {
+	assert.equal(isPointlessEscaping("git\\"), false);
+});
+
+// ── isDisguisedFlag / hasDisguisedFlag ──────────────────────────────────────
 //
-// A quoted flag (`"-rf"`) runs identically to an unquoted one (`-rf`) but
-// evades `arg.startsWith("-")` checks. Rather than unquote-and-continue
-// (a losing chase against every possible quoting/escaping trick), these
-// are used to deny the whole command outright.
+// A disguised flag (`"-rf"`, `\-rf`, `'-r'f`) runs identically to a plain
+// `-rf` but evades `arg.startsWith("-")` checks. Rather than
+// resolve-and-continue matching through it (a losing chase against every
+// possible quoting/escaping trick), these are used to deny the whole
+// command outright.
 
-suite("isQuoteDisguisedFlag");
+suite("isDisguisedFlag");
 
 test("detects double-quoted flag", () => {
-	assert.equal(isQuoteDisguisedFlag('"-rf"'), true);
+	assert.equal(isDisguisedFlag('"-rf"'), true);
 });
 
 test("detects single-quoted flag", () => {
-	assert.equal(isQuoteDisguisedFlag("'-r'"), true);
+	assert.equal(isDisguisedFlag("'-r'"), true);
+});
+
+test("detects backslash-escaped flag", () => {
+	assert.equal(isDisguisedFlag("\\-rf"), true);
+});
+
+test("detects concatenated quote+plain flag", () => {
+	assert.equal(isDisguisedFlag("'-r'f"), true);
 });
 
 test("ignores plain unquoted flag", () => {
-	assert.equal(isQuoteDisguisedFlag("-rf"), false);
+	assert.equal(isDisguisedFlag("-rf"), false);
 });
 
 test("ignores quoted value that isn't a flag", () => {
-	assert.equal(isQuoteDisguisedFlag('"fix bug"'), false);
+	assert.equal(isDisguisedFlag('"fix bug"'), false);
 });
 
 test("ignores mismatched quotes", () => {
-	assert.equal(isQuoteDisguisedFlag('"-rf\''), false);
+	assert.equal(isDisguisedFlag('"-rf\''), false);
 });
 
-test("ignores too-short token", () => {
-	assert.equal(isQuoteDisguisedFlag('""'), false);
+test("ignores too-short/empty token", () => {
+	assert.equal(isDisguisedFlag('""'), false);
+});
+
+test("a leading backslash on a flag is still disguised — no alias-busting exemption for flags", () => {
+	// Unlike the command-name check, there's no legitimate idiom that
+	// backslash-escapes a flag, so isDisguisedFlag doesn't exempt it.
+	assert.equal(isDisguisedFlag("\\-r"), true);
 });
 
 suite("hasDisguisedFlag");
 
 test("finds disguised flag among a command's args", () => {
 	assert.equal(hasDisguisedFlag(["\"-rf\"", "some_dir"]), true);
+});
+
+test("finds backslash-disguised flag among a command's args", () => {
+	assert.equal(hasDisguisedFlag(["\\-rf", "some_dir"]), true);
 });
 
 test("false when flag is unquoted", () => {

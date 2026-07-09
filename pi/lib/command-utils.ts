@@ -167,62 +167,135 @@ export function splitCommandSegments(text: string): string[] {
 
 /**
  * Sentinel returned by {@link commandInvocation} when a segment's command
- * name or a flag-shaped argument is wrapped in quotes for no syntactic
- * reason — e.g. `"git"` or `"-rf"`. Shells strip matching quotes before
- * exec, so these run identically to their unquoted form; quoting them has
- * no effect except defeating string-based policy checks.
+ * name or a flag-shaped argument is quoted or backslash-escaped for no
+ * syntactic reason — e.g. `"git"`, `\-rf`, or `g""it`. A shell resolves all
+ * of these to the exact same literal value as the plain, unescaped form;
+ * escaping them has no effect except defeating string-based policy checks.
  *
  * Distinct from `null` ("this segment runs nothing") so callers can't
  * mistake "couldn't resolve, and possibly not safe" for "there's nothing
  * here to worry about" — every caller of commandInvocation must handle
  * OBFUSCATED explicitly (typically: deny the command).
  *
- * We deliberately don't try to unquote and keep matching through this: a
- * shell offers unlimited ways to write an equivalent token (quoting,
- * `$''`, backslash-per-character, concatenation, …), and chasing each one
- * as it's discovered is a losing game — this project's history is a series
- * of exactly these bypass-then-patch fixes. A legitimate command has no
- * reason to quote a bareword command name or a flag, so any command that
- * does is rejected at the parser step rather than passed on to callers
- * that would otherwise have to reason about what it actually resolves to.
+ * We deliberately don't try to resolve the escaping and keep matching
+ * through it: a shell offers many ways to spell an equivalent token
+ * (quoting, backslash-per-character, concatenation, `$'...'`, variable
+ * expansion, …), and chasing each one as it's discovered is a losing
+ * game — this project's history is a series of exactly these
+ * bypass-then-patch fixes. A legitimate command has no reason to quote or
+ * escape a bareword command name or a flag, so any command that does is
+ * rejected at the parser step rather than passed on to callers that would
+ * otherwise have to reason about what it actually resolves to.
  */
 export const OBFUSCATED = "obfuscated" as const;
 export type ObfuscatedCommand = typeof OBFUSCATED;
 
+// Characters that mean the shell actually needed some form of
+// quoting/escaping to deliver this literal value — whitespace and shell
+// metacharacters. If none of these survive in the resolved value, whatever
+// quoting/escaping produced it was gratuitous.
+const NEEDS_ESCAPING = /[\s'"$`\\;&|<>(){}*?[\]!#~]/;
+
 /**
- * True if `tok`, unwrapped of its surrounding quotes, is a plain bareword —
- * i.e. quoting it was syntactically pointless (no whitespace or shell
- * metacharacters inside that would actually require quoting). This is the
- * shape of a command name, wrapper name, or flag that's been quoted purely
- * to dodge literal-string matching, e.g. `"git"` or `"-rf"`.
+ * Resolve every quote-pair and backslash-escape in `tok` the way a shell
+ * would — including adjacent quoted/escaped/plain fragments with no
+ * separating whitespace, which the shell just concatenates (`g""it`,
+ * `'-r'f`, `\-\-force`, …). Returns null when quoting is unbalanced (a
+ * malformed token we can't draw a conclusion from either way).
+ *
+ * This does not implement full shell semantics — no variable/command
+ * substitution, globbing, or `$'...'` ANSI-C strings — it only answers
+ * "what literal value would this token be once its quote/backslash-escape
+ * mechanisms are peeled off," which is all {@link isPointlessEscaping}
+ * needs.
+ */
+function resolveEscaping(tok: string): string | null {
+	let out = "";
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < tok.length; i++) {
+		const ch = tok[i];
+		if (quote) {
+			if (ch === quote) {
+				quote = null;
+			} else {
+				out += ch;
+			}
+			continue;
+		}
+		if (ch === "'" || ch === '"') {
+			quote = ch;
+			continue;
+		}
+		if (ch === "\\") {
+			i++;
+			if (i >= tok.length) return null; // trailing, dangling backslash
+			out += tok[i];
+			continue;
+		}
+		out += ch;
+	}
+	return quote ? null : out; // unbalanced quote
+}
+
+/**
+ * `\cmd` — a single leading backslash before an otherwise plain bareword.
+ * A well-known bash idiom for bypassing shell aliases (not obfuscation):
+ * the shell strips the backslash and runs the plain word. commandInvocation
+ * deliberately resolves through this elsewhere, so it's exempted here too.
+ */
+function isAliasBustingBackslash(tok: string): boolean {
+	return /^\\[A-Za-z0-9_.\-/:+,@]+$/.test(tok);
+}
+
+/**
+ * True if `tok`, once every quote-pair and backslash-escape a shell
+ * recognizes is resolved (see {@link resolveEscaping}), turns out to be a
+ * plain bareword — i.e. the escaping was gratuitous, done only to defeat
+ * literal-string policy checks rather than because the shell required it.
+ *
+ * Deliberately not scoped to "wrapped in a matching quote pair": a shell
+ * offers many equivalent ways to spell the same literal word — `"git"`,
+ * `'git'`, `g\it`, `g""it`, `'-r'f` — and assuming obfuscation only looks
+ * like quotes would leave the rest of that space uncovered. This still
+ * doesn't chase every shell feature (no `$'...'`, no variable expansion) —
+ * it resolves the two mechanisms a model would realistically reach for
+ * (quoting and backslash-escaping) and denies anything using them without
+ * need, rather than trying to correctly interpret arbitrarily creative
+ * shell syntax.
  *
  * Not applied to ordinary argument values (commit messages, search terms,
- * filenames with spaces, …) — those are legitimately quoted and out of
- * scope for this check; only the leading command word and flag-shaped
- * tokens are.
+ * filenames with spaces, …) — those legitimately need quoting/escaping
+ * because they actually contain whitespace or metacharacters, so this
+ * returns false for them; only a command/flag word with no such content
+ * can be "pointlessly" escaped.
  */
-export function isPointlessQuoting(tok: string): boolean {
-	if (tok.length < 3) return false;
-	const q = tok[0];
-	if (q !== '"' && q !== "'") return false;
-	if (tok[tok.length - 1] !== q) return false;
-	const inner = tok.slice(1, -1);
-	if (inner.length === 0) return false;
-	return !/[\s'"$`\\;&|<>(){}*?[\]!#~]/.test(inner);
+export function isPointlessEscaping(tok: string): boolean {
+	if (!/['"\\]/.test(tok)) return false;
+	if (isAliasBustingBackslash(tok)) return false;
+	const resolved = resolveEscaping(tok);
+	if (resolved === null || resolved.length === 0) return false;
+	return !NEEDS_ESCAPING.test(resolved);
 }
 
 /**
- * True if `tok` is a flag hidden inside a quote pair, e.g. `"-rf"` or
- * `'-r'` — pointless quoting (see {@link isPointlessQuoting}) whose inner
- * content starts with `-`.
+ * True if `tok` is a flag disguised via quoting/backslash-escaping, e.g.
+ * `"-rf"`, `\-rf`, or `'-r'f` — pointless escaping (see
+ * {@link isPointlessEscaping}) whose resolved value starts with `-`.
+ * Unlike {@link isPointlessEscaping}, the alias-busting `\cmd` exemption
+ * does not apply here — there's no legitimate reason to backslash-escape a
+ * flag, leading or otherwise.
  */
-export function isQuoteDisguisedFlag(tok: string): boolean {
-	return isPointlessQuoting(tok) && tok[1] === "-";
+export function isDisguisedFlag(tok: string): boolean {
+	if (!/['"\\]/.test(tok)) return false;
+	const resolved = resolveEscaping(tok);
+	if (resolved === null || resolved.length === 0) return false;
+	if (NEEDS_ESCAPING.test(resolved)) return false;
+	return resolved.startsWith("-");
 }
 
-/** True if any arg in `args` is a flag disguised inside quotes (see {@link isQuoteDisguisedFlag}). */
+/** True if any arg in `args` is a flag disguised via quoting/escaping (see {@link isDisguisedFlag}). */
 export function hasDisguisedFlag(args: string[]): boolean {
-	return args.some(isQuoteDisguisedFlag);
+	return args.some(isDisguisedFlag);
 }
 
 /**
@@ -233,8 +306,8 @@ export function hasDisguisedFlag(args: string[]): boolean {
  * Returns:
  *  - `null` when the segment runs nothing (empty, only env assignments, …)
  *  - {@link OBFUSCATED} when the command name or a flag is pointlessly
- *    quoted (see {@link isPointlessQuoting}) — callers must treat this as
- *    "deny", not "nothing to see here"
+ *    quoted or backslash-escaped (see {@link isPointlessEscaping}) —
+ *    callers must treat this as "deny", not "nothing to see here"
  *  - otherwise the resolved `{ name, args }`
  */
 export function commandInvocation(segment: string): { name: string; args: string[] } | null | ObfuscatedCommand {
@@ -242,7 +315,7 @@ export function commandInvocation(segment: string): { name: string; args: string
 	let i = 0;
 	while (i < tokens.length) {
 		let tok = tokens[i];
-		if (isPointlessQuoting(tok)) return OBFUSCATED;
+		if (isPointlessEscaping(tok)) return OBFUSCATED;
 		if (tok.startsWith("\\")) tok = tok.slice(1); // `\cat` bypasses aliases
 		if (ENV_ASSIGN.test(tok)) {
 			i++;
