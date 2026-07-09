@@ -24,23 +24,6 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
-        # ── Recursively find *.test.ts under srcDir and run each one from
-        # ── $out/<outSubdir>/<relative-path> ─────────────────────────────
-        runTestsRecursive =
-          srcDir: outSubdir:
-          lib.concatMapStrings
-            (testFile: ''
-              echo "Running test: ${testFile}"
-              ${nodejs}/bin/node --test $out/${outSubdir}/${testFile}
-            '')
-            (
-              map (f: lib.removePrefix (toString srcDir + "/") (toString f)) (
-                lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-                  lib.filesystem.listFilesRecursive srcDir
-                )
-              )
-            );
-
         # ── Token generator for GitHub App auth ──────────────────────────────
         # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
         # Prints just the raw token to stdout.
@@ -333,18 +316,21 @@
               mkdir -p $out/node_modules/@vt-pi
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
 
-              # Run tests on lib
-              for test in $out/lib/*.test.ts; do
-                [ -f "$test" ] || continue
-                echo "Running test: lib/$(basename $test)"
-                ${nodejs}/bin/node --test $test
-              done
-
-              # Run tests on packages
-              ${runTestsRecursive ./packages "packages"}
-
-              # Run tests on extensions
-              ${runTestsRecursive ./pi/extensions "extensions"}
+              # ── Run the workspace test suite ────────────────────────────
+              # Assemble a copy of the actual npm workspace (root
+              # package.json, pi/, packages/) and run `npm test
+              # --workspaces`, reusing workspaceDeps' node_modules — it was
+              # built from this same repo checkout, so its @vt-pi/* entries
+              # already match this layout (unlike the flattened
+              # $out/{lib,extensions,packages} above).
+              mkdir -p test-tree/pi test-tree/packages
+              cp ${./package.json} test-tree/package.json
+              cp -r ${./pi}/. test-tree/pi/
+              cp -r ${./packages}/. test-tree/packages/
+              chmod -R u+w test-tree
+              cp -r ${workspaceDeps}/node_modules test-tree/node_modules
+              chmod -R u+w test-tree/node_modules
+              (cd test-tree && npm test --workspaces --if-present)
             '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
