@@ -37,77 +37,74 @@ export function createCommandPolicyExtension(options: CommandPolicyOptions) {
 		pi.on("tool_call", async (event, ctx) => {
 			if (!isToolCallEventType("bash", event)) return;
 
+			// Notify the UI (if any) and return the block result — every rejection
+			// path below reduces to this same shape.
+			const deny = (notify: string, reason: string) => {
+				if (ctx.hasUI) ctx.ui.notify(notify, "warning");
+				return { block: true, reason };
+			};
+
 			const command = event.input.command ?? "";
 
 			// Block here-docs entirely — they're not relevant for command policy.
 			if (hasHereDoc(command)) {
-				if (ctx.hasUI) ctx.ui.notify("🚫 Blocked here-doc (<<).", "warning");
-				return {
-					block: true,
-					reason:
-						`Here-docs (<<) are not allowed. ` +
+				return deny(
+					"🚫 Blocked here-doc (<<).",
+					`Here-docs (<<) are not allowed. ` +
 						`Use inline input or other methods instead. ` +
 						`Blocked: \`${command.trim()}\``,
-				};
+				);
 			}
 			for (const use of getCommandUses(command)) {
 				if (use.obfuscated) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked disguised command.`, "warning");
-					return {
-						block: true,
-						reason:
-							`Command name or flag is pointlessly quoted or backslash-escaped ` +
+					return deny(
+						`🚫 Blocked disguised command.`,
+						`Command name or flag is pointlessly quoted or backslash-escaped ` +
 							`(blocked: \`${use.segment}\`) — e.g. \`"git"\`, \`\\-rf\`, or \`g""it\` run identically ` +
 							`to \`git\` or \`-rf\` but hide from the command policy. Rewrite the command with the ` +
 							`command name and flags written plainly, with no quotes or backslashes.`,
-					};
+					);
 				}
 
 				const entry = options.entries.find((candidate) => matchesEntry(use, candidate));
 				if (!entry) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${use.name}.`, "warning");
-					return {
-						block: true,
-						reason: `Command is not on the allow list (blocked: \`${use.segment}\`).`,
-					};
+					return deny(
+						`🚫 Blocked ${use.name}.`,
+						`Command is not on the allow list (blocked: \`${use.segment}\`).`,
+					);
 				}
 
 				if (entry.status === CommandPolicyStatus.Banned) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${entry.name}.`, "warning");
-					return {
-						block: true,
-						reason: `${entry.name} is banned (blocked: \`${use.segment}\`). ${entry.description ?? ""}`,
-					};
+					return deny(
+						`🚫 Blocked ${entry.name}.`,
+						`${entry.name} is banned (blocked: \`${use.segment}\`). ${entry.description ?? ""}`,
+					);
 				}
 
 				const bannedFlag = findBannedFlag(use, entry);
 				if (bannedFlag) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${entry.name} flag ${bannedFlag}.`, "warning");
-					return {
-						block: true,
-						reason: `Flag \`${bannedFlag}\` is not allowed for ${entry.name} (blocked: \`${use.segment}\`). ${entry.description ?? ""}`,
-					};
+					return deny(
+						`🚫 Blocked ${entry.name} flag ${bannedFlag}.`,
+						`Flag \`${bannedFlag}\` is not allowed for ${entry.name} (blocked: \`${use.segment}\`). ${entry.description ?? ""}`,
+					);
 				}
 
 				const disallowedFlag = findDisallowedFlag(use, entry);
 				if (disallowedFlag) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${entry.name} flag ${disallowedFlag}.`, "warning");
-					return {
-						block: true,
-						reason:
-							`Flag \`${disallowedFlag}\` is not in the allowed flags for ${entry.name} ` +
+					return deny(
+						`🚫 Blocked ${entry.name} flag ${disallowedFlag}.`,
+						`Flag \`${disallowedFlag}\` is not in the allowed flags for ${entry.name} ` +
 							`(blocked: \`${use.segment}\`). Allowed flags: ${entry.allowedFlags?.join(", ")}. ` +
 							`${entry.description ?? ""}`,
-					};
+					);
 				}
 
 				const validationError = entry.validate?.(use);
 				if (validationError) {
-					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${entry.name}.`, "warning");
-					return {
-						block: true,
-						reason: `${entry.name} is not allowed here (blocked: \`${use.segment}\`). ${validationError}`,
-					};
+					return deny(
+						`🚫 Blocked ${entry.name}.`,
+						`${entry.name} is not allowed here (blocked: \`${use.segment}\`). ${validationError}`,
+					);
 				}
 			}
 		});

@@ -9,6 +9,11 @@ import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from ".
 
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse };
 
+/** True for short-flag syntax: a single leading dash followed by non-dash characters (e.g. `-r`, `-rf`, but not `--force`). */
+function isShortFlag(s: string): boolean {
+	return s.length >= 2 && s[0] === "-" && s[1] !== "-";
+}
+
 /**
  * Check whether a command use matches a policy entry.
  */
@@ -33,9 +38,7 @@ export function flagMatches(arg: string, flag: string): boolean {
 	if (arg === flag || arg.startsWith(`${flag}=`)) return true;
 
 	// Handle combined short flags: `-rfv` should match banned `-r` or `-rf`.
-	// Short flags start with a single dash followed by non-dash characters.
-	const isShort = (s: string) => s.length >= 2 && s[0] === "-" && s[1] !== "-";
-	if (isShort(arg) && isShort(flag)) {
+	if (isShortFlag(arg) && isShortFlag(flag)) {
 		const argChars = new Set(arg.slice(1));
 		return [...flag.slice(1)].every((ch) => argChars.has(ch));
 	}
@@ -78,7 +81,7 @@ export function findDisallowedFlag(use: CommandUse, entry: CommandPolicyEntry): 
 	}
 
 	for (const flag of commandFlags(use)) {
-		const isCombinedShort = flag.length > 2 && flag[0] === "-" && flag[1] !== "-" && !flag.includes("=");
+		const isCombinedShort = flag.length > 2 && isShortFlag(flag) && !flag.includes("=");
 		if (isCombinedShort) {
 			if ([...flag.slice(1)].some((ch) => !allowedChars.has(ch))) return flag;
 			continue;
