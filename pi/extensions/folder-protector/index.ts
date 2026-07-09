@@ -17,9 +17,13 @@ import { BANNED_FOLDERS, isPathInsideBannedFolder } from "../../lib/folder-guard
 
 export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event, ctx) => {
-		if (!isToolCallEventType("write", event) && !isToolCallEventType("edit", event)) return;
+		const toolType = isToolCallEventType("write", event)
+			? "write"
+			: isToolCallEventType("edit", event)
+				? "edit"
+				: null;
+		if (!toolType) return;
 
-		const toolType = isToolCallEventType("write", event) ? "write" : "edit";
 		const filePath: string | undefined = event.input.path;
 		if (!filePath || !isPathInsideBannedFolder(filePath, BANNED_FOLDERS)) return;
 
