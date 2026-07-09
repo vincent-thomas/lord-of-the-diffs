@@ -22,8 +22,13 @@ export interface CommandUse {
 type CommandPolicyEntryBase = {
 	/** Display name for the entry, e.g. "git status" or "rg" */
 	name: string;
-	/** Executable basename or predicate to match, e.g. "git", "rg", or python variants */
-	command: string | ((command: string) => boolean);
+	/**
+	 * Executable basename to match (e.g. "git", "rg"), or a predicate over the
+	 * full resolved use — command name plus args — so a predicate can match on
+	 * more than just the executable name, e.g. "is this invocation targeting a
+	 * path inside a protected folder?"
+	 */
+	command: string | ((use: CommandUse) => boolean);
 	/** Optional required leading args/subcommand, e.g. [["status"]] for `git status`.
  * Each sub-array is checked independently; if ANY matches, the entry matches.
  * So [["status"], ["diff"]] matches both `git status` and `git diff`. */

@@ -34,7 +34,7 @@ function shortFlagChars(s: string): string[] {
  */
 export function matchesEntry(use: CommandUse, entry: CommandPolicyEntry): boolean {
 	const commandMatches =
-		typeof entry.command === "string" ? use.name === entry.command.toLowerCase() : entry.command(use.name);
+		typeof entry.command === "string" ? use.name === entry.command.toLowerCase() : entry.command(use);
 	if (!commandMatches) return false;
 	if (!entry.subcommand) return true;
 	// subcommand is a list of arrays — ANY matching sub-array is sufficient (OR semantics).

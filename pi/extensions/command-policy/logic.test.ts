@@ -12,13 +12,15 @@
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { CommandPolicyStatus } from "@vt-pi/command-policy";
+import { CommandPolicyStatus, type CommandUse } from "@vt-pi/command-policy";
 import { COMMAND_POLICY_ENTRIES } from "./logic.ts";
 
 suite("COMMAND_POLICY_ENTRIES");
 function findEntry(name: string) {
 	return COMMAND_POLICY_ENTRIES.find((entry) => entry.name === name);
 }
+
+const use = (name: string, args: string[]): CommandUse => ({ name, args, segment: `${name} ${args.join(" ")}` });
 
 test("allows commands by exact command", () => {
 	assert.equal(findEntry("rg")?.status, CommandPolicyStatus.Allowed);
@@ -73,4 +75,23 @@ test("cp bans -a/--archive, not just -r/-R/--recursive — archive mode also cop
 test("supports allowed flags per allowed entry", () => {
 	assert.ok(findEntry("git status")?.allowedFlags?.includes("--short"));
 	assert.equal(findEntry("git status")?.bannedFlags, undefined);
+});
+
+test("protected folder entry is checked first, ahead of otherwise-allowed commands", () => {
+	assert.equal(COMMAND_POLICY_ENTRIES[0].name, "protected folder");
+	assert.equal(COMMAND_POLICY_ENTRIES[0].status, CommandPolicyStatus.Banned);
+});
+
+test("protected folder entry blocks file-manipulation commands targeting .git/node_modules/target", () => {
+	const command = findEntry("protected folder")!.command as (u: CommandUse) => boolean;
+	assert.ok(command(use("cp", ["file", ".git/somewhere"])));
+	assert.ok(command(use("rm", ["-rf", "node_modules"])));
+	assert.ok(command(use("tee", [".git/hooks/pre-commit"])));
+	assert.ok(command(use("dd", ["if=payload", "of=.git/hooks/pre-commit"])));
+});
+
+test("protected folder entry does not match unrelated commands or paths", () => {
+	const command = findEntry("protected folder")!.command as (u: CommandUse) => boolean;
+	assert.ok(!command(use("cp", ["file", "out/dir"])));
+	assert.ok(!command(use("rg", ["foo"])));
 });
