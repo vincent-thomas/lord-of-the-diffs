@@ -45,6 +45,12 @@ export interface PushResult {
 	output: string;
 }
 
+export interface MergeResult {
+	success: boolean;
+	output: string;
+	conflictPaths: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Git push
 // ---------------------------------------------------------------------------
@@ -88,6 +94,16 @@ async function tryExec(
 	} catch {
 		return null;
 	}
+}
+
+/** Returns the current branch name via async git (see file header re: why not execSync). */
+async function getCurrentBranchAsync(cwd: string, signal?: AbortSignal): Promise<string> {
+	const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", {
+		cwd,
+		timeout: 5_000,
+		signal,
+	});
+	return stdout.trim();
 }
 
 const GH_DEFAULT_BRANCH_QUERY =
@@ -135,16 +151,13 @@ export async function hasUnpushedCommits(
 	signal?: AbortSignal,
 ): Promise<boolean> {
 	try {
-		const { stdout: branch } = await execAsync(
-			"git rev-parse --abbrev-ref HEAD",
-			{ cwd, timeout: 5_000, signal },
-		);
+		const branch = await getCurrentBranchAsync(cwd, signal);
 		const { stdout: localSha } = await execAsync(
 			"git rev-parse HEAD",
 			{ cwd, timeout: 5_000, signal },
 		);
 		const { stdout: remoteSha } = await execAsync(
-			`git ls-remote origin ${shellQuote(branch.trim())}`,
+			`git ls-remote origin ${shellQuote(branch)}`,
 			{ cwd, timeout: 10_000, signal },
 		);
 
@@ -535,7 +548,7 @@ export async function mergeBaseBranchIntoCurrent(
 	baseBranch: string,
 	currentBranch: string,
 	signal?: AbortSignal,
-): Promise<{ success: boolean; output: string; conflictPaths: string[] }> {
+): Promise<MergeResult> {
 	const safeBranch = currentBranch.replace(/[^a-zA-Z0-9_-]/g, "-");
 	const worktreePath = `/tmp/vt-pi-merge-${safeBranch}-${Date.now()}`;
 
@@ -690,7 +703,7 @@ export async function needsPullBeforePush(
 export async function pullRemoteChanges(
 	cwd: string,
 	signal?: AbortSignal,
-): Promise<{ success: boolean; output: string; conflictPaths: string[] }> {
+): Promise<MergeResult> {
 	try {
 		const { stdout, stderr } = await execAsync(
 			"git pull --no-rebase --no-edit 2>&1",
@@ -777,11 +790,7 @@ export async function generatePrTitle(
 	signal?: AbortSignal,
 ): Promise<string> {
 	try {
-		const { stdout } = await execAsync(
-			"git rev-parse --abbrev-ref HEAD",
-			{ cwd, timeout: 5_000, signal },
-		);
-		let branch = stdout.trim();
+		let branch = await getCurrentBranchAsync(cwd, signal);
 
 		// Remove vt_ prefix if present.
 		if (branch.startsWith("vt_")) {
@@ -870,11 +879,7 @@ export async function createDraftPr(
 ): Promise<{ success: boolean; url: string | null; output: string }> {
 	try {
 		// Get the current branch name to pass explicitly via --head.
-		const { stdout: branch } = await execAsync(
-			"git rev-parse --abbrev-ref HEAD",
-			{ cwd, timeout: 5_000, signal },
-		);
-		const head = branch.trim();
+		const head = await getCurrentBranchAsync(cwd, signal);
 
 		// Detect the default base branch via gh.
 		const base = await getDefaultBranch(cwd, signal);
