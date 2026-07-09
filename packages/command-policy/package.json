@@ -7,7 +7,6 @@
 		".": "./index.ts",
 		"./types.ts": "./types.ts",
 		"./predicates.ts": "./predicates.ts",
-		"./matching.ts": "./matching.ts",
-		"./command-utils.ts": "./command-utils.ts"
+		"./matching.ts": "./matching.ts"
 	}
 }
