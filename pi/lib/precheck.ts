@@ -50,22 +50,19 @@ export async function runPreChecks(
 	const command = "make";
 	const start = Date.now();
 
+	let passed: boolean;
+	let output: string;
 	try {
-		const { stdout, stderr } = await execAsync(command, {
-			cwd,
-			timeout: 600_000,
-			signal,
-		});
-		const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-		const output = stdout + stderr;
-		const step = { command, passed: true, output, elapsed };
-		onStep?.(step);
-		return { passed: true, steps: [step] };
+		const { stdout, stderr } = await execAsync(command, { cwd, timeout: 600_000, signal });
+		passed = true;
+		output = stdout + stderr;
 	} catch (err: unknown) {
-		const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-		const output = extractErrorOutput(err);
-		const step = { command, passed: false, output, elapsed };
-		onStep?.(step);
-		return { passed: false, steps: [step] };
+		passed = false;
+		output = extractErrorOutput(err);
 	}
+
+	const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+	const step = { command, passed, output, elapsed };
+	onStep?.(step);
+	return { passed, steps: [step] };
 }
