@@ -90,17 +90,16 @@ async function tryExec(
 	}
 }
 
+const GH_DEFAULT_BRANCH_QUERY =
+	"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null";
+const GH_PR_BASE_BRANCH_QUERY = "gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null";
+
 /**
  * Detect the repo's default branch (e.g. "main") via `gh`, falling back to
  * "main" if the lookup fails or `gh` isn't available.
  */
 async function getDefaultBranch(cwd: string, signal?: AbortSignal): Promise<string> {
-	const branch = await tryExec(
-		"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
-		cwd,
-		10_000,
-		signal,
-	);
+	const branch = await tryExec(GH_DEFAULT_BRANCH_QUERY, cwd, 10_000, signal);
 	return branch ?? "main";
 }
 
@@ -496,22 +495,12 @@ export async function getPrBaseBranch(
 	signal?: AbortSignal,
 ): Promise<string | null> {
 	// Try to get the base branch from an existing PR first.
-	const baseFromPr = await tryExec(
-		"gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null",
-		cwd,
-		15_000,
-		signal,
-	);
+	const baseFromPr = await tryExec(GH_PR_BASE_BRANCH_QUERY, cwd, 15_000, signal);
 	if (baseFromPr) return baseFromPr;
 
 	// Fall back to the repo's default branch (e.g. "main") when no PR exists.
 	// This ensures the base-branch-ahead check runs even on the first push.
-	return tryExec(
-		"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
-		cwd,
-		15_000,
-		signal,
-	);
+	return tryExec(GH_DEFAULT_BRANCH_QUERY, cwd, 15_000, signal);
 }
 
 /**
@@ -673,30 +662,12 @@ export async function detectPrConflictsLocally(
 	signal?: AbortSignal,
 ): Promise<{ hasConflicts: boolean; conflictPaths: string[]; baseBranch: string | null }> {
 	// Determine the PR base branch. Try gh first, fall back to git config.
-	let baseBranch: string | null = null;
-
-	try {
-		const { stdout } = await execAsync(
-			"gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null",
-			{ cwd, timeout: 10_000, signal },
-		);
-		baseBranch = stdout.trim() || null;
-	} catch {
-		// gh not available or no PR — fall through
-	}
+	let baseBranch = await tryExec(GH_PR_BASE_BRANCH_QUERY, cwd, 10_000, signal);
 
 	if (!baseBranch) {
 		// Try to guess the base branch from the remote HEAD or default branch
-		try {
-			const { stdout } = await execAsync(
-				"git rev-parse --abbrev-ref origin/HEAD 2>/dev/null",
-				{ cwd, timeout: 5_000, signal },
-			);
-			const ref = stdout.trim().replace("origin/", "");
-			if (ref) baseBranch = ref;
-		} catch {
-			// Ignore
-		}
+		const originHead = await tryExec("git rev-parse --abbrev-ref origin/HEAD 2>/dev/null", cwd, 5_000, signal);
+		if (originHead) baseBranch = originHead.replace("origin/", "");
 	}
 
 	if (!baseBranch) {
