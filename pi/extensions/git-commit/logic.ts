@@ -6,6 +6,7 @@
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
 import { runPreChecks } from "../../lib/precheck.ts";
 import { isDefaultBranch, hasUpstream as hasUpstreamBranch } from "../../lib/git-utils.ts";
+import { shellQuote } from "../../lib/shell-quote.ts";
 
 // Re-exports from lib so consumers (index.ts, tests) keep the same import path.
 export { runPreChecks } from "../../lib/precheck.ts";
@@ -46,10 +47,6 @@ export interface CommitResult {
 	output: string;
 }
 
-function shellEscape(s: string): string {
-	return s.replace(/'/g, "'\\''");
-}
-
 /**
  * True if there are staged changes ready to commit.
  * `git diff --cached --quiet` exits 0 when nothing is staged and non-zero
@@ -87,7 +84,7 @@ export async function gitCommit(
 	// Commit.
 	try {
 		const { stdout, stderr } = await execAsync(
-			`git commit -m '${shellEscape(message)}'`,
+			`git commit -m ${shellQuote(message)}`,
 			{ cwd, timeout: 30_000, signal },
 		);
 		return { success: true, output: (stdout + stderr).trim() };
