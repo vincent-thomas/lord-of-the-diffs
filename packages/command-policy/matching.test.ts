@@ -282,3 +282,12 @@ test("second command use in a chain is checked too", () => {
 	const violation = evaluateCommand("rg foo && wget bar", testEntries);
 	assert.match(violation?.reason ?? "", /not on the allow list/);
 });
+
+test("xargs is transparent to the wrapped command's banned flags", () => {
+	const violation = evaluateCommand("rg foo | xargs rm -rf", testEntries);
+	assert.match(violation?.reason ?? "", /Flag `-rf` is not allowed/);
+});
+
+test("xargs wrapping an allowed command is allowed", () => {
+	assert.equal(evaluateCommand("xargs rg foo", testEntries), null);
+});
