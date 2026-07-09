@@ -63,18 +63,23 @@ are plain TypeScript with no build step — Node's native type-stripping runs
 out of `pi/lib/` into its own `packages/<name>/` package when it's a
 self-contained feature with its own public API that's substantial enough to
 reason about independently — e.g. `@vt-pi/command-policy` bundles the shell
-command allow-list types, matching engine, and the Pi extension factory
-behind one entry point (`createCommandPolicyExtension`), rather than leaving
-that logic as loose files in `pi/lib/` alongside unrelated helpers like
-`git-utils.ts`.
+command allow-list types, predicates, and matching engine behind one entry
+point, rather than leaving that logic as loose files in `pi/lib/` alongside
+unrelated helpers like `git-utils.ts`.
+
+**`packages/*` must never depend on Pi** (no import of
+`@mariozechner/pi-coding-agent`, direct or transitive) — the same "no Pi
+imports" rule `pi/lib/` follows, just enforced at the package boundary too.
+These packages are meant to be usable outside this repo's agent entirely, and
+a package that imports the agent it's meant to be used *by* is a circular
+dependency in spirit even when the module graph itself has no cycle. Pi
+wiring (`ExtensionAPI`, `pi.on(...)`, `isToolCallEventType`) belongs in the
+consuming extension's own `index.ts`, which imports the package's pure
+matching functions and calls them from its `tool_call` handler — see
+`pi/extensions/command-policy/index.ts` for the pattern.
 
 A package's `package.json` needs an `exports` map entry for every subpath
-another workspace member imports (e.g. `@vt-pi/lib/command-utils.ts`). Keep
-Pi-touching code (anything importing `@mariozechner/pi-coding-agent`) in its
-own file behind the package's main `index.ts` export — pure-logic test files
-elsewhere in the repo should import a pure subpath (e.g.
-`@vt-pi/command-policy/matching.ts`) instead of the barrel, so testing that
-logic doesn't require `@mariozechner/pi-coding-agent` to be resolvable.
+another workspace member imports (e.g. `@vt-pi/lib/command-utils.ts`).
 
 `flake.nix`'s `piCustomizations` and `pi` derivations wire up each
 `@vt-pi/*` workspace package as a symlink under `node_modules/@vt-pi/` —

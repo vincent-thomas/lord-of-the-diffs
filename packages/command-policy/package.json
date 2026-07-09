@@ -4,10 +4,7 @@
 	"version": "0.0.0",
 	"type": "module",
 	"exports": {
-		".": "./index.ts",
-		"./types.ts": "./types.ts",
-		"./predicates.ts": "./predicates.ts",
-		"./matching.ts": "./matching.ts"
+		".": "./index.ts"
 	},
 	"dependencies": {
 		"@vt-pi/lib": "*"
