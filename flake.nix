@@ -24,6 +24,23 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
+        # ── Recursively find *.test.ts under srcDir and run each one from
+        # ── $out/<outSubdir>/<relative-path> ─────────────────────────────
+        runTestsRecursive =
+          srcDir: outSubdir:
+          lib.concatMapStrings
+            (testFile: ''
+              echo "Running test: ${testFile}"
+              ${nodejs}/bin/node --test $out/${outSubdir}/${testFile}
+            '')
+            (
+              map (f: lib.removePrefix (toString srcDir + "/") (toString f)) (
+                lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
+                  lib.filesystem.listFilesRecursive srcDir
+                )
+              )
+            );
+
         # ── Token generator for GitHub App auth ──────────────────────────────
         # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
         # Prints just the raw token to stdout.
@@ -324,34 +341,10 @@
               done
 
               # Run tests on packages
-              ${lib.concatMapStrings
-                (testFile: ''
-                  echo "Running test: ${testFile}"
-                  ${nodejs}/bin/node --test $out/packages/${testFile}
-                '')
-                (
-                  map (f: lib.removePrefix (toString ./packages + "/") (toString f)) (
-                    lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-                      lib.filesystem.listFilesRecursive ./packages
-                    )
-                  )
-                )
-              }
+              ${runTestsRecursive ./packages "packages"}
 
               # Run tests on extensions
-              ${lib.concatMapStrings
-                (testFile: ''
-                  echo "Running test: ${testFile}"
-                  ${nodejs}/bin/node --test $out/extensions/${testFile}
-                '')
-                (
-                  map (f: lib.removePrefix (toString ./pi/extensions + "/") (toString f)) (
-                    lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-                      lib.filesystem.listFilesRecursive ./pi/extensions
-                    )
-                  )
-                )
-              }
+              ${runTestsRecursive ./pi/extensions "extensions"}
             '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
