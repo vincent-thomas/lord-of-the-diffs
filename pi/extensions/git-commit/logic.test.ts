@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { isDefaultBranch, gitCommit } from "./logic.ts";
+import { isDefaultBranch, gitCommit, branchExistsOnRemote } from "./logic.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -39,6 +39,29 @@ function withGitRepo(
 	};
 }
 
+function withGitRepos(
+	fn: (local: string, remote: string) => void | Promise<void>,
+): () => Promise<void> {
+	return async () => {
+		const base = mkdtempSync(join(tmpdir(), "commit-remote-test-"));
+		const remotePath = join(base, "remote.git");
+		const localPath = join(base, "local");
+		try {
+			execSync(`git init --bare ${remotePath}`, { stdio: "pipe" });
+			execSync(`git clone ${remotePath} ${localPath}`, { stdio: "pipe" });
+			git("git config user.email test@test.com", localPath);
+			git("git config user.name test", localPath);
+			writeFileSync(join(localPath, "init.txt"), "init");
+			git("git add .", localPath);
+			git("git commit -m init", localPath);
+			git("git push", localPath);
+			await fn(localPath, remotePath);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	};
+}
+
 // ---------------------------------------------------------------------------
 // isDefaultBranch
 // ---------------------------------------------------------------------------
@@ -50,6 +73,44 @@ suite("isDefaultBranch", () => {
 	test("feature/foo", () => assert.equal(isDefaultBranch("feature/foo"), false));
 	test("main-v2", () => assert.equal(isDefaultBranch("main-v2"), false));
 	test("my-master", () => assert.equal(isDefaultBranch("my-master"), false));
+});
+
+// ---------------------------------------------------------------------------
+// branchExistsOnRemote
+// ---------------------------------------------------------------------------
+
+suite("branchExistsOnRemote", () => {
+	test(
+		"current branch already on remote → true",
+		withGitRepos(async (local) => {
+			const branch = git("git branch --show-current", local);
+			assert.equal(await branchExistsOnRemote(local, branch), true);
+		}),
+	);
+
+	test(
+		"local-only branch not yet pushed → false",
+		withGitRepos(async (local) => {
+			git("git checkout -b feature/unpushed", local);
+			assert.equal(await branchExistsOnRemote(local, "feature/unpushed"), false);
+		}),
+	);
+
+	test(
+		"branch name that doesn't exist anywhere → false",
+		withGitRepos(async (local) => {
+			assert.equal(await branchExistsOnRemote(local, "no-such-branch"), false);
+		}),
+	);
+
+	test("git failure (no remote configured) → false", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "commit-norepo-"));
+		try {
+			assert.equal(await branchExistsOnRemote(dir, "main"), false);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
 
 // ---------------------------------------------------------------------------
