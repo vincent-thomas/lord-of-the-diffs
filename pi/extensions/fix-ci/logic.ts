@@ -188,7 +188,10 @@ const MAX_POLLS = 360;
 const POLL_INTERVAL_SHORT_MS = 10_000;
 const POLL_INTERVAL_LONG_MS = 30_000;
 const SHORT_PHASE_POLLS = 12;
-const EMPTY_GRACE_POLLS = 4;
+// Consecutive confirming polls required before trusting a "done" signal that
+// a single API blip could produce — used both for "no checks ever showed up"
+// and for "checks finished but suites haven't settled yet".
+const GRACE_POLLS = 4;
 
 function isPending(state: string): boolean {
 	return state === "PENDING" || state === "IN_PROGRESS";
@@ -293,7 +296,7 @@ export async function pollChecks(
 			if (suitesComplete) emptyPolls++;
 			else emptyPolls = 0;
 
-			if (suitesComplete && emptyPolls >= EMPTY_GRACE_POLLS) {
+			if (suitesComplete && emptyPolls >= GRACE_POLLS) {
 				onStatus?.(`No checks were registered for ${mode}.`);
 				return { checks, timedOut: false, polls, mode };
 			}
@@ -311,7 +314,7 @@ export async function pollChecks(
 			// Once all checks have completed at least once, start settling grace period
 			if (allChecksCompletedOnce && !suitesComplete) {
 				settlingPolls++;
-				if (settlingPolls >= EMPTY_GRACE_POLLS) {
+				if (settlingPolls >= GRACE_POLLS) {
 					onStatus?.(
 						`All ${total} checks finished for ${mode} (suites never fully settled, proceeding).`,
 					);
