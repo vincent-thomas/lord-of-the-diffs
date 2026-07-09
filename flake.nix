@@ -258,6 +258,17 @@
           dontNpmBuild = true;
           npmFlags = [ "--ignore-scripts" ];
 
+          # dontNpmBuild only skips buildNpmPackage's own "npm run build"
+          # step — it doesn't stop stdenv's generic buildPhase from noticing
+          # this repo's own root Makefile (copied in via `src = ./.`) and
+          # running `make` (which runs `nix build`, recursively — not
+          # available inside this derivation's sandbox). Override buildPhase
+          # outright so nothing auto-detects it.
+          buildPhase = ''
+            runHook preBuild
+            runHook postBuild
+          '';
+
           installPhase = ''
             runHook preInstall
             mkdir -p $out
