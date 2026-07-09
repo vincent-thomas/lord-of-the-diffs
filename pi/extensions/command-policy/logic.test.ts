@@ -368,10 +368,30 @@ test("allows git on a subcommand basis", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
 		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
-		["rev-parse"], ["merge-base"], ["commit"], ["rm"],
+		["rev-parse"], ["merge-base"], ["commit"],
 	]);
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
 	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
+	assert.deepEqual(findEntry("git rm")?.subcommand, [["rm"]]);
+});
+
+test("git rm bans recursive flags, matching plain rm", () => {
+	assert.ok(findEntry("git rm")?.bannedFlags?.includes("-r"));
+	assert.ok(findEntry("git rm")?.bannedFlags?.includes("-rf"));
+});
+
+test("git rm -rf is blocked (bypass regression)", () => {
+	const use: CommandUse = { name: "git", args: ["rm", "-rf", "dir/"], segment: "git rm -rf dir/" };
+	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
+	assert.equal(entry?.name, "git rm");
+	assert.equal(findBannedFlag(use, entry!), "-r");
+});
+
+test("git rm without recursive flags is still allowed", () => {
+	const use: CommandUse = { name: "git", args: ["rm", "file.txt"], segment: "git rm file.txt" };
+	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
+	assert.equal(entry?.name, "git rm");
+	assert.equal(findBannedFlag(use, entry!), null);
 });
 
 test("can explicitly ban entries with model guidance", () => {
