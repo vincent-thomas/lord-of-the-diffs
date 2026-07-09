@@ -14,6 +14,7 @@ import {
 	gitPush,
 	extractRunId,
 	trimLog,
+	parseReviewComments,
 } from "./logic.ts";
 import {
 	isGitPushLine,
@@ -219,6 +220,51 @@ suite("trimLog", () => {
 		const lines = Array.from({ length: 200 }, (_, i) => `line ${i}`);
 		const log = lines.join("\n");
 		assert.equal(trimLog(log, 200), log);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// parseReviewComments
+// ---------------------------------------------------------------------------
+
+suite("parseReviewComments", () => {
+	test("maps a single-line comment (no start_line)", () => {
+		const raw = [
+			{ id: 1, path: "a.ts", line: 42, body: "fix this", user: { login: "alice" } },
+		];
+		const [comment] = parseReviewComments(raw, 99);
+		assert.deepEqual(comment, {
+			id: 1,
+			pullRequestReviewId: 99,
+			path: "a.ts",
+			line: 42,
+			startLine: null,
+			body: "fix this",
+			author: "alice",
+		});
+	});
+
+	test("maps a multi-line comment's start_line to startLine", () => {
+		const raw = [
+			{ id: 2, path: "b.ts", line: 10, start_line: 5, body: "range comment", user: { login: "bob" } },
+		];
+		const [comment] = parseReviewComments(raw, 100);
+		assert.equal(comment.startLine, 5);
+		assert.equal(comment.line, 10);
+	});
+
+	test("defaults missing fields", () => {
+		const [comment] = parseReviewComments([{ id: 3 }], 1);
+		assert.equal(comment.path, "");
+		assert.equal(comment.line, null);
+		assert.equal(comment.startLine, null);
+		assert.equal(comment.body, "");
+		assert.equal(comment.author, "unknown");
+	});
+
+	test("non-array input returns empty list", () => {
+		assert.deepEqual(parseReviewComments(null, 1), []);
+		assert.deepEqual(parseReviewComments(undefined, 1), []);
 	});
 });
 
