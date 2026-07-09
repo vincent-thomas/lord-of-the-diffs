@@ -59,11 +59,10 @@ export default function (pi: ExtensionAPI) {
 
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       const cwd = ctx.cwd;
+      const notify = (text: string) => onUpdate?.({ content: [{ type: "text", text }] });
 
       // ── 0. Reject if working tree is dirty ─────────────────────────
-      onUpdate?.({
-        content: [{ type: "text", text: "Checking for uncommitted changes…" }],
-      });
+      notify("Checking for uncommitted changes…");
 
       if (await isWorktreeDirty(cwd, signal)) {
         return {
@@ -109,14 +108,7 @@ export default function (pi: ExtensionAPI) {
             };
           }
 
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text: `Merging ${prBase} into ${branchName} via worktree…`,
-              },
-            ],
-          });
+          notify(`Merging ${prBase} into ${branchName} via worktree…`);
 
           const mergeResult = await mergeBaseBranchIntoCurrent(
             cwd,
@@ -182,16 +174,10 @@ export default function (pi: ExtensionAPI) {
             };
           }
 
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text:
-                  `Successfully merged \`${prBase}\` into \`${branchName}\` ` +
-                  `without conflicts. Proceeding with push…`,
-              },
-            ],
-          });
+          notify(
+            `Successfully merged \`${prBase}\` into \`${branchName}\` ` +
+              `without conflicts. Proceeding with push…`,
+          );
         }
       }
 
@@ -204,23 +190,12 @@ export default function (pi: ExtensionAPI) {
         cycleCount++;
 
         // ── Pull remote changes if local and remote have diverged ────────
-        onUpdate?.({
-          content: [
-            { type: "text", text: "Checking if remote has newer commits…" },
-          ],
-        });
+        notify("Checking if remote has newer commits…");
 
         const needsPull = await needsPullBeforePush(cwd, signal);
 
         if (needsPull) {
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text: `Remote and local have diverged — pulling changes via merge (non-history-rewriting)…`,
-              },
-            ],
-          });
+          notify(`Remote and local have diverged — pulling changes via merge (non-history-rewriting)…`);
 
           const pullResult = await pullRemoteChanges(cwd, signal);
 
@@ -278,20 +253,11 @@ export default function (pi: ExtensionAPI) {
             };
           }
 
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text: "Pull succeeded. Proceeding with push…",
-              },
-            ],
-          });
+          notify("Pull succeeded. Proceeding with push…");
         }
 
         // Push
-        onUpdate?.({
-          content: [{ type: "text", text: "Pushing to origin…" }],
-        });
+        notify("Pushing to origin…");
 
         const pushResult = await gitPush(cwd, signal);
 
@@ -316,9 +282,7 @@ export default function (pi: ExtensionAPI) {
         // ── Create draft PR if none exists ──────────────────────────
         const existingPr = await detectPrNumber(cwd, signal);
         if (!existingPr) {
-          onUpdate?.({
-            content: [{ type: "text", text: "Creating draft pull request…" }],
-          });
+          notify("Creating draft pull request…");
 
           // Generate PR body from commit messages.
           const prBody = await generatePrBody(cwd, signal);
@@ -343,28 +307,12 @@ export default function (pi: ExtensionAPI) {
           }
 
           const prUrl = prResult.url ? prResult.url : "(see gh output)";
-          onUpdate?.({
-            content: [{ type: "text", text: `Draft PR created: ${prUrl}` }],
-          });
+          notify(`Draft PR created: ${prUrl}`);
         } else {
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text: `PR #${existingPr} already exists — skipping creation.`,
-              },
-            ],
-          });
+          notify(`PR #${existingPr} already exists — skipping creation.`);
         }
       } else {
-        onUpdate?.({
-          content: [
-            {
-              type: "text",
-              text: "Nothing to push — checking CI for current HEAD…",
-            },
-          ],
-        });
+        notify("Nothing to push — checking CI for current HEAD…");
         pushedSha = (await getHeadSha(cwd, signal)) ?? undefined;
       }
 
@@ -400,23 +348,9 @@ export default function (pi: ExtensionAPI) {
       }
 
       // ── 4. Poll checks ───────────────────────────────────────────────
-      onUpdate?.({
-        content: [
-          {
-            type: "text",
-            text: `Push succeeded. Polling CI (cycle ${cycle}/${MAX_CYCLES})…`,
-          },
-        ],
-      });
+      notify(`Push succeeded. Polling CI (cycle ${cycle}/${MAX_CYCLES})…`);
 
-      const pollResult = await pollChecks(
-        cwd,
-        signal,
-        (status) => {
-          onUpdate?.({ content: [{ type: "text", text: status }] });
-        },
-        pushedSha,
-      );
+      const pollResult = await pollChecks(cwd, signal, notify, pushedSha);
 
       if (pollResult.timedOut) {
         cycleCount = 0;
@@ -478,14 +412,7 @@ export default function (pi: ExtensionAPI) {
         // ── Mark PR ready and wait for review ─────────────────────
         const prNum = await detectPrNumber(cwd, signal);
         if (prNum) {
-          onUpdate?.({
-            content: [
-              {
-                type: "text",
-                text: `CI passed for PR #${prNum}. Marking ready for review…`,
-              },
-            ],
-          });
+          notify(`CI passed for PR #${prNum}. Marking ready for review…`);
 
           const ready = await markPrReady(cwd, signal);
           if (ready) {
@@ -506,14 +433,7 @@ export default function (pi: ExtensionAPI) {
             signal,
           );
           if (previousReviewer) {
-            onUpdate?.({
-              content: [
-                {
-                  type: "text",
-                  text: `Re-requesting review from @${previousReviewer} (previously requested changes)…`,
-                },
-              ],
-            });
+            notify(`Re-requesting review from @${previousReviewer} (previously requested changes)…`);
             const reRequested = await addReviewers(cwd, previousReviewer, signal);
             if (reRequested) {
               successLines.push(
@@ -524,13 +444,9 @@ export default function (pi: ExtensionAPI) {
           }
 
           // ── Wait for review ──────────────────────────────────
-          onUpdate?.({
-            content: [{ type: "text", text: "Waiting for review…" }],
-          });
+          notify("Waiting for review…");
 
-          const reviewResult = await waitForReview(cwd, signal, (status) => {
-            onUpdate?.({ content: [{ type: "text", text: status }] });
-          });
+          const reviewResult = await waitForReview(cwd, signal, notify);
 
           if (reviewResult.decision === "changes_requested") {
             return {
@@ -586,14 +502,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // ── 6. Fetch failure logs ────────────────────────────────────────
-      onUpdate?.({
-        content: [
-          {
-            type: "text",
-            text: `${failures.length} check(s) failed. Fetching logs…`,
-          },
-        ],
-      });
+      notify(`${failures.length} check(s) failed. Fetching logs…`);
 
       const failureLogs = await fetchFailureLogs(failures, cwd, signal);
       const report = buildReport(
