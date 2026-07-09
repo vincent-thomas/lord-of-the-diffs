@@ -959,6 +959,17 @@ export interface ReviewResult {
 // Review fetching
 // ---------------------------------------------------------------------------
 
+/** Shape of one entry in `gh api .../pulls/{n}/reviews` output that we care about. */
+interface RawReview {
+	id: number;
+	author?: { login: string };
+	user?: { login: string };
+	state?: string;
+	body?: string;
+	submitted_at?: string;
+	commit_id?: string;
+}
+
 async function fetchPrReviews(
 	cwd: string,
 	prNumber: number | null,
@@ -971,18 +982,28 @@ async function fetchPrReviews(
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
-		const raw = JSON.parse(stdout.trim());
-		return (Array.isArray(raw) ? raw : []).map((r: Record<string, unknown>) => ({
-			id: r.id as number,
-			author: ((r.author ?? r.user) as Record<string, unknown>)?.login as string ?? "unknown",
-			state: r.state as string ?? "UNKNOWN",
-			body: r.body as string ?? "",
-			submittedAt: r.submitted_at as string ?? "",
-			commitId: (r.commit_id as string) ?? null,
+		const raw: RawReview[] = JSON.parse(stdout.trim());
+		return (Array.isArray(raw) ? raw : []).map((r) => ({
+			id: r.id,
+			author: (r.author ?? r.user)?.login ?? "unknown",
+			state: r.state ?? "UNKNOWN",
+			body: r.body ?? "",
+			submittedAt: r.submitted_at ?? "",
+			commitId: r.commit_id ?? null,
 		}));
 	} catch {
 		return [];
 	}
+}
+
+/** Shape of one entry in `gh api .../reviews/{id}/comments` output that we care about. */
+interface RawReviewComment {
+	id: number;
+	path?: string;
+	line?: number;
+	start_line?: number;
+	body?: string;
+	user?: { login: string };
 }
 
 /**
@@ -991,14 +1012,15 @@ async function fetchPrReviews(
  * without mocking `gh`.
  */
 export function parseReviewComments(raw: unknown, reviewId: number): ReviewComment[] {
-	return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
-		id: c.id as number,
+	const comments = raw as RawReviewComment[];
+	return (Array.isArray(comments) ? comments : []).map((c) => ({
+		id: c.id,
 		pullRequestReviewId: reviewId,
-		path: c.path as string ?? "",
-		line: c.line as number ?? null,
-		startLine: (c.start_line as number) ?? null,
-		body: c.body as string ?? "",
-		author: (c.user as Record<string, unknown>)?.login as string ?? "unknown",
+		path: c.path ?? "",
+		line: c.line ?? null,
+		startLine: c.start_line ?? null,
+		body: c.body ?? "",
+		author: c.user?.login ?? "unknown",
 	}));
 }
 
