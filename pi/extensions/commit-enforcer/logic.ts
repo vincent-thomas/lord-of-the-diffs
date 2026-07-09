@@ -64,20 +64,13 @@ export function buildNagMessage(
 	if (dirty) issues.push("uncommitted changes in the working tree");
 	if (unpushed) issues.push("committed but unpushed commits");
 
-	let message = `## ⚠️ Pending Git Changes\n\nYou have ${issues.join(" and ")}. Before yielding back, resolve them:\n\n`;
+	const steps: string[] = [];
+	if (dirty) steps.push("✅ Commit the changes using `git_commit` (or discard with `git checkout -- .`)");
+	if (dirty && unpushed) steps.push("✅ Then push using `push_and_check_ci`");
+	else if (unpushed) steps.push("✅ Push committed changes using `push_and_check_ci`");
+	steps.push("🏳️ Yield back anyway by calling `yield_with_uncommitted_changes` with a reason");
 
-	if (dirty) {
-		message += "1. ✅ Commit the changes using `git_commit` (or discard with `git checkout -- .`)\n";
-		if (unpushed) {
-			message += "2. ✅ Then push using `push_and_check_ci`\n";
-			message += "3. 🏳️ Yield back anyway by calling `yield_with_uncommitted_changes` with a reason\n\n";
-		} else {
-			message += "2. 🏳️ Yield back anyway by calling `yield_with_uncommitted_changes` with a reason\n\n";
-		}
-	} else if (unpushed) {
-		message += "1. ✅ Push committed changes using `push_and_check_ci`\n";
-		message += "2. 🏳️ Yield back anyway by calling `yield_with_uncommitted_changes` with a reason\n\n";
-	}
-
-	return message;
+	const header = `## ⚠️ Pending Git Changes\n\nYou have ${issues.join(" and ")}. Before yielding back, resolve them:\n\n`;
+	const body = steps.map((step, i) => `${i + 1}. ${step}\n`).join("");
+	return `${header}${body}\n`;
 }

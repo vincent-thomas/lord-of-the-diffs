@@ -29,9 +29,11 @@ type CommandPolicyEntryBase = {
 	 * path inside a protected folder?"
 	 */
 	command: string | ((use: CommandUse) => boolean);
-	/** Optional required leading args/subcommand, e.g. [["status"]] for `git status`.
- * Each sub-array is checked independently; if ANY matches, the entry matches.
- * So [["status"], ["diff"]] matches both `git status` and `git diff`. */
+	/**
+	 * Optional required leading args/subcommand, e.g. [["status"]] for `git status`.
+	 * Each sub-array is checked independently; if ANY matches, the entry matches.
+	 * So [["status"], ["diff"]] matches both `git status` and `git diff`.
+	 */
 	subcommand?: (string[])[];
 	/** Guidance included when this entry blocks a command */
 	description?: string;

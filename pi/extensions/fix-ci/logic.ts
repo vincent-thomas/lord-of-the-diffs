@@ -90,6 +90,20 @@ async function tryExec(
 	}
 }
 
+/**
+ * Detect the repo's default branch (e.g. "main") via `gh`, falling back to
+ * "main" if the lookup fails or `gh` isn't available.
+ */
+async function getDefaultBranch(cwd: string, signal?: AbortSignal): Promise<string> {
+	const branch = await tryExec(
+		"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
+		cwd,
+		10_000,
+		signal,
+	);
+	return branch ?? "main";
+}
+
 export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise<number | null> {
 	const stdout = await tryExec(
 		"gh pr view --json number,state --jq 'select(.state != \"CLOSED\" and .state != \"MERGED\") | .number' 2>/dev/null",
@@ -946,17 +960,7 @@ export async function generatePrBody(
 		// Determine the repo's default branch, then find the fork point.
 		let base: string;
 		try {
-			// Detect the default branch via gh (avoid hardcoding "main").
-			let defaultBranch = "main";
-			try {
-				const { stdout: defaultRef } = await execAsync(
-					"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
-					{ cwd, timeout: 10_000, signal },
-				);
-				if (defaultRef.trim()) defaultBranch = defaultRef.trim();
-			} catch {
-				// fallback to main
-			}
+			const defaultBranch = await getDefaultBranch(cwd, signal);
 
 			// Fetch the latest base branch ref so merge-base is accurate.
 			await execAsync(`git fetch origin ${shellQuote(defaultBranch)} 2>/dev/null`, {
@@ -1016,16 +1020,7 @@ export async function createDraftPr(
 		const head = branch.trim();
 
 		// Detect the default base branch via gh.
-		let base = "main";
-		try {
-			const { stdout: defaultBranch } = await execAsync(
-				"gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null",
-				{ cwd, timeout: 10_000, signal },
-			);
-			if (defaultBranch.trim()) base = defaultBranch.trim();
-		} catch {
-			// fallback to main
-		}
+		const base = await getDefaultBranch(cwd, signal);
 
 		const { stdout, stderr } = await execAsync(
 			`gh pr create --draft --title ${shellQuote(title)} --body ${shellQuote(body)} --head ${shellQuote(head)} --base ${shellQuote(base)}`,

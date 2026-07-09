@@ -107,16 +107,21 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 		subcommand: [["commit"]],
 		description: "Do not run git commit directly in bash. Use the git_commit tool instead.",
 	},
-	{ name: "git", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [
-    ["diff"],
-    ["log"],
-    ["show"],
-    ["ls-files"],
-    ["add"],
-    ["restore"],
-    ["rev-parse"],
-    ["merge-base"]
-  ] },
+	{
+		name: "git",
+		status: CommandPolicyStatus.Allowed,
+		command: "git",
+		subcommand: [
+			["diff"],
+			["log"],
+			["show"],
+			["ls-files"],
+			["add"],
+			["restore"],
+			["rev-parse"],
+			["merge-base"],
+		],
+	},
 	{
 		name: "git rm",
 		status: CommandPolicyStatus.Allowed,
