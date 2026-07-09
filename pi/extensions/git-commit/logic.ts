@@ -51,6 +51,21 @@ function shellEscape(s: string): string {
 }
 
 /**
+ * True if there are staged changes ready to commit.
+ * `git diff --cached --quiet` exits 0 when nothing is staged and non-zero
+ * when something is — flipped here so callers get a normally-named boolean
+ * instead of having to remember which exit code means what.
+ */
+async function hasStagedChanges(cwd: string, signal?: AbortSignal): Promise<boolean> {
+	try {
+		await execAsync("git diff --cached --quiet", { cwd, timeout: 5_000, signal });
+		return false;
+	} catch {
+		return true;
+	}
+}
+
+/**
  * Commit the currently-staged changes with the given message.
  * Does NOT stage anything itself — the caller is responsible for staging
  * (e.g. with `git add`) beforehand.
@@ -61,21 +76,12 @@ export async function gitCommit(
 	message: string,
 	signal?: AbortSignal,
 ): Promise<CommitResult> {
-	// Check if there's anything staged.
-	try {
-		await execAsync("git diff --cached --quiet", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		// Exit 0 means no staged changes.
+	if (!(await hasStagedChanges(cwd, signal))) {
 		return {
 			success: false,
 			output: "Nothing to commit — no staged changes. " +
 				"Use `add_all: true` to auto-stage, or `git add` individual files.",
 		};
-	} catch {
-		// Exit 1 means there ARE staged changes — proceed.
 	}
 
 	// Commit.
