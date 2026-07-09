@@ -1,21 +1,16 @@
 /**
  * git-commit extension
  *
- * 1. `git_commit` tool — checks default branch, runs pre-checks (static
- *    analysis only), then commits the currently-staged changes with
- *    the provided message. Does NOT stage anything itself.
+ * `git_commit` tool — checks default branch, runs pre-checks (static
+ * analysis only), then commits the currently-staged changes with
+ * the provided message. Does NOT stage anything itself.
  *
- * 2. Blocks ALL manual `git commit` in bash — the AI must use the tool.
+ * Manual `git commit` in bash is blocked by the command-policy extension
+ * (COMMAND_POLICY_ENTRIES bans the "git commit" subcommand), not here.
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import {
-	findGitCommitInText,
-	findGitCommitInScript,
-	extractScriptPaths,
-	currentBranch,
-} from "../../lib/git-utils.ts";
+import { currentBranch } from "../../lib/git-utils.ts";
 import { isDefaultBranch, hasUpstreamBranch, branchExistsOnRemote } from "./logic.ts";
 import { runPreChecks, gitCommit } from "./logic.ts";
 import { execAsync } from "../../lib/exec-async.ts";
@@ -168,45 +163,5 @@ export default function (pi: ExtensionAPI) {
 				],
 			};
 		},
-	});
-
-	// ── Block manual `git commit` in bash ─────────────────────────────────────
-	pi.on("tool_call", async (event, ctx) => {
-		if (!isToolCallEventType("bash", event)) return;
-
-		const cmd = event.input.command ?? "";
-
-		// Check inline command
-		const inlineHit = findGitCommitInText(cmd);
-		if (inlineHit) {
-			if (ctx.hasUI) {
-				ctx.ui.notify("✋ Blocked `git commit` — use the git_commit tool.", "warning");
-			}
-			return {
-				block: true,
-				reason:
-					`Do not run \`git commit\` directly in bash. ` +
-					`Use the \`git_commit\` tool instead. Blocked command: ${inlineHit}`,
-			};
-		}
-
-		// Check scripts being executed
-		for (const scriptPath of extractScriptPaths(cmd)) {
-			const scriptHit = findGitCommitInScript(scriptPath, ctx.cwd);
-			if (scriptHit) {
-				if (ctx.hasUI) {
-					ctx.ui.notify(
-						`✋ Blocked script with git commit — use the git_commit tool.`,
-						"warning",
-					);
-				}
-				return {
-					block: true,
-					reason:
-						`Cannot execute "${scriptPath}" — it contains git commit. ` +
-						`Use the \`git_commit\` tool instead. Blocked line: ${scriptHit}`,
-				};
-			}
-		}
 	});
 }

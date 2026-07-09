@@ -16,11 +16,6 @@ import {
 	trimLog,
 	parseReviewComments,
 } from "./logic.ts";
-import {
-	isGitPushLine,
-	findGitPushInText,
-	extractScriptPaths,
-} from "../../lib/git-utils.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -29,102 +24,6 @@ import { tmpdir } from "node:os";
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// isGitPushLine — blocked
-// ---------------------------------------------------------------------------
-
-suite("isGitPushLine — blocked", () => {
-	const cases = [
-		"git push",
-		"git push origin main",
-		"git push origin HEAD",
-		"git push --set-upstream origin feature",
-		"git push -u origin feature",
-		"git push --force",
-		"git push -f",
-		"git push --force-with-lease",
-		"sudo git push",
-		"sudo -n git push origin main",
-		// Forms the old regex matcher missed:
-		"git -C /tmp/repo push",
-		"git -c user.name=x push",
-		"GIT_DIR=.git git push",
-		"env git push",
-		"/usr/bin/git push origin main",
-		"\\git push",
-		// Quoted command name — `"git"` runs identically to `git` once the
-		// shell strips the quotes, but used to slip past the `inv.name ===
-		// "git"` check. commandInvocation now returns the OBFUSCATED sentinel
-		// for this, and isGitSubcommand treats that as a match (fail closed).
-		'"git" push',
-		"'git' push",
-	];
-	for (const c of cases) {
-		test(JSON.stringify(c), () => assert.ok(isGitPushLine(c)));
-	}
-});
-
-test("obfuscated command is treated as a git-push match even when unrelated — defense in depth", () => {
-	// isGitSubcommand can't tell what an obfuscated segment actually invokes,
-	// so it conservatively matches every subcommand check it's used for. The
-	// command-policy allowlist is expected to be the primary, precisely-worded
-	// gate for cases like this; this is a backstop, not the main UX path.
-	assert.ok(isGitPushLine('rm "-rf" dir/'));
-});
-
-suite("isGitPushLine — allowed", () => {
-	const cases = [
-		"echo git push",
-		"git status",
-		"git commit -m 'msg'",
-		"git pull origin main",
-		"git fetch origin",
-		"# git push",
-	];
-	for (const c of cases) {
-		test(JSON.stringify(c), () => assert.ok(!isGitPushLine(c)));
-	}
-});
-
-// ---------------------------------------------------------------------------
-// findGitPushInText
-// ---------------------------------------------------------------------------
-
-suite("findGitPushInText — detected", () => {
-	test("bare git push", () => assert.ok(findGitPushInText("git push") !== null));
-
-	test("push with remote and branch", () =>
-		assert.ok(findGitPushInText("git push origin main") !== null));
-
-	test("force push", () => assert.ok(findGitPushInText("git push --force") !== null));
-
-	test("push in multi-line script", () => {
-		const script = "#!/bin/bash\ngit add .\ngit commit -m 'wip'\ngit push";
-		assert.ok(findGitPushInText(script) !== null);
-	});
-
-	test("push after && on same line", () =>
-		assert.ok(findGitPushInText("git commit -m 'msg' && git push") !== null));
-
-	test("push after ; on same line", () =>
-		assert.ok(findGitPushInText("git add .; git push") !== null));
-
-	test("returns the offending line trimmed", () => {
-		const result = findGitPushInText("  git push origin main  ");
-		assert.equal(result, "git push origin main");
-	});
-});
-
-suite("findGitPushInText — not detected", () => {
-	test("no push", () => assert.equal(findGitPushInText("git commit -m 'msg'"), null));
-
-	test("commented-out push", () => assert.equal(findGitPushInText("# git push"), null));
-
-	test("echo git push", () => assert.equal(findGitPushInText("echo git push"), null));
-
-	test("git pull (not push)", () => assert.equal(findGitPushInText("git pull origin main"), null));
-});
 
 // ---------------------------------------------------------------------------
 // isFailure (bucket-based)
@@ -281,35 +180,6 @@ suite("parseReviewComments", () => {
 		assert.deepEqual(parseReviewComments(undefined, 1), []);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// extractScriptPaths
-// ---------------------------------------------------------------------------
-
-suite("extractScriptPaths", () => {
-	test("bash script.sh", () =>
-		assert.deepEqual(extractScriptPaths("bash script.sh"), ["script.sh"]));
-
-	test("bash with flags", () =>
-		assert.deepEqual(extractScriptPaths("bash -x -e ./deploy.sh"), ["./deploy.sh"]));
-
-	test("source form", () =>
-		assert.deepEqual(extractScriptPaths("source ./setup.sh"), ["./setup.sh"]));
-
-	test("dot form", () => assert.deepEqual(extractScriptPaths(". ./setup.sh"), ["./setup.sh"]));
-
-	test("direct ./script", () => assert.deepEqual(extractScriptPaths("./build.sh"), ["./build.sh"]));
-
-	test("bash -c inline → no paths", () =>
-		assert.deepEqual(extractScriptPaths("bash -c 'git push'"), []));
-
-	test("compound: multiple scripts", () =>
-		assert.deepEqual(extractScriptPaths("bash a.sh && bash b.sh"), ["a.sh", "b.sh"]));
-
-	test("multi-line: scripts on separate lines with no operator between them", () =>
-		assert.deepEqual(extractScriptPaths("bash a.sh\nbash b.sh"), ["a.sh", "b.sh"]));
-});
-
 
 // ---------------------------------------------------------------------------
 // hasUnpushedCommits

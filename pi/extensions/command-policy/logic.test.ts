@@ -27,7 +27,7 @@ test("allows commands by exact command", () => {
 	assert.equal(findEntry("jq")?.command, "jq");
 });
 
-test("allows git only on the listed subcommands — commit is deliberately absent (use the git_commit tool)", () => {
+test("allows git only on the listed subcommands — commit and push are banned separately below", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
 		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
@@ -36,6 +36,15 @@ test("allows git only on the listed subcommands — commit is deliberately absen
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
 	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
 	assert.deepEqual(findEntry("git rm")?.subcommand, [["rm"]]);
+});
+
+test("bans git push and git commit — use push_and_check_ci / git_commit tools instead", () => {
+	assert.equal(findEntry("git push")?.status, CommandPolicyStatus.Banned);
+	assert.deepEqual(findEntry("git push")?.subcommand, [["push"]]);
+	assert.match(findEntry("git push")?.description ?? "", /push_and_check_ci/);
+	assert.equal(findEntry("git commit")?.status, CommandPolicyStatus.Banned);
+	assert.deepEqual(findEntry("git commit")?.subcommand, [["commit"]]);
+	assert.match(findEntry("git commit")?.description ?? "", /git_commit/);
 });
 
 test("git rm bans recursive flags, matching plain rm", () => {

@@ -81,6 +81,20 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 		subcommand: [["branch"]],
 		description: "Use the git_commit or push_and_check_ci tools for branch management.",
 	},
+	{
+		name: "git push",
+		status: CommandPolicyStatus.Banned,
+		command: "git",
+		subcommand: [["push"]],
+		description: "Do not run git push directly in bash. Use the push_and_check_ci tool instead — it pushes your code and automatically waits for CI checks to complete.",
+	},
+	{
+		name: "git commit",
+		status: CommandPolicyStatus.Banned,
+		command: "git",
+		subcommand: [["commit"]],
+		description: "Do not run git commit directly in bash. Use the git_commit tool instead.",
+	},
 	{ name: "git", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [
     ["diff"],
     ["log"],

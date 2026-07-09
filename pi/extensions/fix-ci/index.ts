@@ -1,23 +1,16 @@
 /**
  * fix-ci extension
  *
- * 1. `push_and_check_ci` tool — pushes code, polls GitHub checks until they
- *    finish, returns results with failure logs. Tracks fix cycles and tells
- *    the AI to stop after MAX_CYCLES attempts.
+ * `push_and_check_ci` tool — pushes code, polls GitHub checks until they
+ * finish, returns results with failure logs. Tracks fix cycles and tells
+ * the AI to stop after MAX_CYCLES attempts.
  *
- * 2. Blocks ALL manual `git push` in bash — the AI must use the tool instead.
+ * Manual `git push` in bash is blocked by the command-policy extension
+ * (COMMAND_POLICY_ENTRIES bans the "git push" subcommand), not here.
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import {
-  currentBranch,
-  isWorktreeDirty,
-  isGitPushLine,
-  findGitPushInText,
-  findGitPushInScript,
-  extractScriptPaths,
-} from "../../lib/git-utils.ts";
+import { currentBranch, isWorktreeDirty } from "../../lib/git-utils.ts";
 import {
   gitPush,
   getHeadSha,
@@ -660,39 +653,6 @@ export default function (pi: ExtensionAPI) {
         },
       };
     },
-  });
-
-  // ── Block all manual git push in bash ─────────────────────────────────────
-  pi.on("tool_call", async (event, ctx) => {
-    if (!isToolCallEventType("bash", event)) return;
-
-    const cmd = event.input.command ?? "";
-
-    // Check inline command
-    const inlineHit = findGitPushInText(cmd);
-    if (inlineHit) {
-      return {
-        block: true,
-        reason:
-          `git push is not allowed in bash. Use the push_and_check_ci tool instead. ` +
-          `It pushes your code and automatically waits for CI checks to complete. ` +
-          `Blocked command: ${inlineHit}`,
-      };
-    }
-
-    // Check scripts being executed
-    for (const scriptPath of extractScriptPaths(cmd)) {
-      const scriptHit = findGitPushInScript(scriptPath, ctx.cwd);
-      if (scriptHit) {
-        return {
-          block: true,
-          reason:
-            `Cannot execute "${scriptPath}" — it contains git push. ` +
-            `Use the push_and_check_ci tool instead. ` +
-            `Blocked line in script: ${scriptHit}`,
-        };
-      }
-    }
   });
 }
 
