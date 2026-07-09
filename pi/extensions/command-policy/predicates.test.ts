@@ -1,12 +1,16 @@
 /**
- * predicates.test.ts — tests for the language interpreter command predicates.
+ * predicates.test.ts — tests for @vt-pi/command-policy's language interpreter
+ * command predicates.
+ *
+ * Lives in this extension (not in the @vt-pi/command-policy package itself)
+ * — command-policy logic is tested from the side that consumes it.
  *
  * Run with:   node --test predicates.test.ts
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findCommandUse } from "./command-utils.ts";
-import { isAwkCommand, isPerlCommand, isPythonCommand } from "./predicates.ts";
+import { findCommandUse } from "@vt-pi/command-policy/command-utils.ts";
+import { isAwkCommand, isPerlCommand, isPythonCommand } from "@vt-pi/command-policy/predicates.ts";
 
 test("arguments are not treated as commands", () => {
 	assert.equal(findCommandUse("echo awk", isAwkCommand), null);

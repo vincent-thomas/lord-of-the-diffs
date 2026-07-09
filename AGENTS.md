@@ -87,6 +87,15 @@ into the package rather than importing it — see
 `packages/command-policy/command-utils.ts`, a deliberate copy of
 `pi/lib/command-utils.ts`'s parsing logic.
 
+**Tests for a package's logic live in the extension that consumes it, not in
+the package itself** — e.g. `packages/command-policy/` has no `*.test.ts`
+files; `matching.test.ts`, `predicates.test.ts`, and `logic.test.ts` all live
+under `pi/extensions/command-policy/`, importing the package's pure subpaths
+(`@vt-pi/command-policy/matching.ts`, etc.) to test it from the consumer's
+side. This keeps `packages/*` as plain, test-free implementations that vt-pi
+exercises through its own extension test suites, the same way vt-pi tests
+everything else it depends on.
+
 `flake.nix`'s `piCustomizations` and `pi` derivations wire up each
 `@vt-pi/*` workspace package as a symlink under `node_modules/@vt-pi/` —
 equivalent to what `npm install` would produce for these

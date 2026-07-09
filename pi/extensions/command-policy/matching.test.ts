@@ -1,12 +1,15 @@
 /**
- * matching.test.ts — tests for command policy matching helpers.
+ * matching.test.ts — tests for @vt-pi/command-policy's matching helpers.
+ *
+ * Lives in this extension (not in the @vt-pi/command-policy package itself)
+ * — command-policy logic is tested from the side that consumes it.
  *
  * Run with:   node --test matching.test.ts
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { CommandPolicyStatus, type CommandUse } from "./types.ts";
-import { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./matching.ts";
+import { CommandPolicyStatus, type CommandUse } from "@vt-pi/command-policy/types.ts";
+import { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "@vt-pi/command-policy/matching.ts";
 
 suite("getCommandUses — command uses extraction");
 test("extracts command uses with segment", () => {
