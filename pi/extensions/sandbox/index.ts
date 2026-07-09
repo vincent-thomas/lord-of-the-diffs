@@ -15,21 +15,14 @@ SANDBOX MODE is active for this user request only.
 - If the task requires an operation outside these limits, explain that it is not available in sandbox mode and answer as far as possible from read-only inspection.
 `;
 
-interface SandboxRun {
-	id: number;
-	previousTools: string[];
-}
-
 export default function (pi: ExtensionAPI) {
-	let sandboxRun: SandboxRun | null = null;
-	let nextRunId = 1;
+	let previousTools: string[] | null = null;
 
 	function restoreSandbox(ctx?: { hasUI?: boolean; ui?: { notify?: Function; setStatus?: Function } }) {
-		const run = sandboxRun;
-		if (!run) return;
+		if (!previousTools) return;
 
-		sandboxRun = null;
-		pi.setActiveTools(run.previousTools);
+		pi.setActiveTools(previousTools);
+		previousTools = null;
 
 		if (ctx?.hasUI) {
 			ctx.ui?.setStatus?.("sandbox", undefined);
@@ -46,7 +39,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			if (sandboxRun) {
+			if (previousTools) {
 				ctx.ui.notify("Sandbox mode is already active for the current response.", "warning");
 				return;
 			}
@@ -56,7 +49,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const previousTools = pi.getActiveTools();
+			const activeTools = pi.getActiveTools();
 			const sandboxTools = sandboxActiveToolNames(pi.getAllTools().map((tool) => tool.name));
 
 			if (sandboxTools.length === 0) {
@@ -64,7 +57,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			sandboxRun = { id: nextRunId++, previousTools };
+			previousTools = activeTools;
 			pi.setActiveTools(sandboxTools);
 			ctx.ui.setStatus("sandbox", "sandbox: read-only");
 			ctx.ui.notify(
@@ -82,7 +75,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event) => {
-		if (!sandboxRun) return;
+		if (!previousTools) return;
 
 		return {
 			systemPrompt: event.systemPrompt + SANDBOX_SYSTEM_PROMPT,
@@ -90,7 +83,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (!sandboxRun) return;
+		if (!previousTools) return;
 
 		if (event.toolName === "read" || event.toolName === "ls") return;
 
