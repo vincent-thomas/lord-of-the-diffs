@@ -77,7 +77,7 @@ pushing, it rejects dirty working trees (uncommitted changes). It also tries to
 reconcile PR merge conflicts and divergent branches automatically, and stops
 after `MAX_CYCLES` (3) fix attempts.
 
-### Write guard (`pi/extensions/write-guard.ts`)
+### Write guard (`pi/extensions/write-guard/`)
 
 Blocks the `write` tool from overwriting existing files larger than 50 lines.
 Forces the agent to use `edit` instead, which requires exact text matching and
@@ -85,7 +85,7 @@ can't silently drop content. The Makefile is fully protected — neither `write`
 nor `edit` can modify it. If the Makefile needs to change, the agent must ask
 the user.
 
-### No file writes in bash (`pi/extensions/no-file-writes.ts`)
+### No file writes in bash (`pi/extensions/no-file-writes/`)
 
 Blocks all shell redirections (`>`, `>>`) to files. The agent must use the
 `write` or `edit` tools instead.
