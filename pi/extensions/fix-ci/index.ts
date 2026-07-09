@@ -86,8 +86,8 @@ export default function (pi: ExtensionAPI) {
       // ── 1. Check if base branch is ahead — merge if so ─────────────
       // Keep the PR branch up to date with the base branch before pushing
       // and running CI. This prevents CI from testing a stale branch.
-      let branchName = currentBranch(cwd);
-      let prBase = await getPrBaseBranch(cwd, signal);
+      const branchName = currentBranch(cwd);
+      const prBase = await getPrBaseBranch(cwd, signal);
 
       if (prBase) {
         const baseAhead = await isBaseBranchAhead(cwd, prBase, signal);
@@ -197,7 +197,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      // 2. Check if there's something to push.
+      // ── 2. Check if there's something to push ──────────────────────
       const hasSomethingToPush = await hasUnpushedCommits(cwd, signal);
 
       let pushedSha: string | undefined;
@@ -375,7 +375,7 @@ export default function (pi: ExtensionAPI) {
 
       const cycle = cycleCount;
 
-      // ── Check if PR is already closed/merged (auto-merge may have landed) ─
+      // ── 3. Check if PR is already closed/merged (auto-merge may have landed) ─
       const prState = await getPrState(cwd, signal);
       if (prState === "MERGED") {
         cycleCount = 0;
@@ -404,7 +404,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
-      // 3. Poll checks
+      // ── 4. Poll checks ───────────────────────────────────────────────
       onUpdate?.({
         content: [
           {
@@ -445,7 +445,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
-      // 3. Categorise
+      // ── 5. Categorise ────────────────────────────────────────────────
       const failures = pollResult.checks.filter((c) => isFailure(c.bucket));
 
       // ⚠️ No checks at all — don't claim CI is green.
@@ -590,7 +590,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
-      // 4. Fetch failure logs
+      // ── 6. Fetch failure logs ────────────────────────────────────────
       onUpdate?.({
         content: [
           {
@@ -608,7 +608,7 @@ export default function (pi: ExtensionAPI) {
         failureLogs,
       );
 
-      // 5. Cycle limit
+      // ── 7. Cycle limit ───────────────────────────────────────────────
       if (cycle >= MAX_CYCLES) {
         cycleCount = 0;
         return {
@@ -631,7 +631,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
 
-      // 6. Return failures for the AI to fix
+      // ── 8. Return failures for the AI to fix ─────────────────────────
       return {
         content: [
           {
