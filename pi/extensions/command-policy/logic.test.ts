@@ -342,6 +342,16 @@ test("multiple flags first disallowed is reported", () => {
 	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["--short"] }), "-v");
 });
 
+test("combined short flag cannot smuggle a disallowed char past an allowed one (-sv vs -s)", () => {
+	const use: CommandUse = { name: "git", args: ["status", "-sv"], segment: "git status -sv" };
+	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["--short", "--porcelain", "-s"] }), "-sv");
+});
+
+test("combined short flag passes when every char is individually allowed", () => {
+	const use: CommandUse = { name: "git", args: ["status", "-sb"], segment: "git status -sb" };
+	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["-s", "-b"] }), null);
+});
+
 suite("COMMAND_POLICY_ENTRIES");
 function findEntry(name: string) {
 	return COMMAND_POLICY_ENTRIES.find((entry) => entry.name === name);
