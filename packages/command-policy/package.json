@@ -4,7 +4,9 @@
 	"version": "0.0.0",
 	"type": "module",
 	"exports": {
-		".": "./index.ts",
-		"./pure.ts": "./pure.ts"
+		".": "./index.ts"
+	},
+	"dependencies": {
+		"@mariozechner/pi-coding-agent": "^0.73.1"
 	}
 }

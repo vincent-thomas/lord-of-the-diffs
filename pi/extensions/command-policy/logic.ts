@@ -2,7 +2,7 @@
  * Command policy definitions for shell command allow rules.
  */
 
-import { CommandPolicyStatus, type CommandPolicyEntry } from "@vt-pi/command-policy/pure.ts";
+import { CommandPolicyStatus, type CommandPolicyEntry } from "@vt-pi/command-policy";
 import { isAwkCommand, isPerlCommand, isPythonCommand } from "./predicates.ts";
 
 export const COMMAND_POLICY_SYSTEM_PROMPT = `

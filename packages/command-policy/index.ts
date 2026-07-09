@@ -2,17 +2,18 @@
  * @vt-pi/command-policy — a Pi extension factory that allows only configured
  * shell command invocations via the bash tool.
  *
- * The default export builds the extension from a list of policy entries:
+ * This is the package's only public entry point (see package.json's
+ * "exports"), and createCommandPolicyExtension plus the types needed to
+ * build a CommandPolicyEntry[] for it are its only exports:
  *
- *   import createCommandPolicyExtension from "@vt-pi/command-policy";
+ *   import createCommandPolicyExtension, { CommandPolicyStatus } from "@vt-pi/command-policy";
  *   export default createCommandPolicyExtension({ entries: [...] });
  *
- * CommandPolicyEntry and the matching primitives (matchesEntry,
- * findBannedFlag) needed to build and test entries are deliberately not
- * re-exported here — importing them through this barrel would pull in
- * extension.ts's @mariozechner/pi-coding-agent dependency. Import them from
- * "@vt-pi/command-policy/pure.ts" instead, this package's other public
- * entry point.
+ * The matching engine (matchesEntry, findBannedFlag, …) and command-utils.ts
+ * are private implementation, used only internally by
+ * createCommandPolicyExtension — not exported, not meant to be depended on
+ * directly.
  */
 
 export { createCommandPolicyExtension as default, type CommandPolicyOptions } from "./extension.ts";
+export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./types.ts";

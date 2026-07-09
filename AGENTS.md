@@ -68,43 +68,50 @@ behind one entry point (`createCommandPolicyExtension`), rather than leaving
 that logic as loose files in `pi/lib/` alongside unrelated helpers like
 `git-utils.ts`.
 
-**A package's public API should be as small as the actual consumer needs —
-export what's used, not everything a module happens to define.** Before
-adding something to a package's exports, check whether any file outside the
-package actually imports it; if not, keep it private. Policy choices that
-happen to live near the engine (e.g. *which* command-name predicates like
-`isPythonCommand` to ban) aren't part of the engine itself — those belong
-in the consuming extension (`pi/extensions/command-policy`), where the
-actual entries get constructed, not in the package.
+**A package encapsulates its functionality: `index.ts` is the only file in
+`package.json`'s `exports`, and it exports only the thing the package is
+for plus the types needed to use it** — for `@vt-pi/command-policy`, that's
+`createCommandPolicyExtension` (default export) and `CommandPolicyEntry`/
+`CommandPolicyStatus`/`CommandUse`/`CommandPolicyOptions`. The matching
+engine (`matchesEntry`, `findBannedFlag`, …) and `command-utils.ts` are
+private, used only internally by `createCommandPolicyExtension`, and may be
+freely restructured. Code that isn't used internally by the package's own
+public function doesn't belong in the package — e.g. the command-name
+predicates (`isPythonCommand`, …) live in `pi/extensions/command-policy/`
+instead, since *which* interpreters to ban is a policy choice made where
+entries are constructed, not something the engine itself needs.
 
-A package's `package.json` needs an `exports` map entry for every subpath
-another workspace member imports (e.g. `@vt-pi/lib/command-utils.ts`). Keep
-Pi-touching code (anything importing `@mariozechner/pi-coding-agent`) in its
-own file behind the package's main `index.ts` export — pure-logic consumers
-elsewhere in the repo should import a second, deliberate entry point instead
-(e.g. `@vt-pi/command-policy/pure.ts`, which re-exports only the types and
-matching primitives actually used outside the package), so depending on it
-doesn't require `@mariozechner/pi-coding-agent` to be resolvable. Files not
-named in `exports` (`types.ts`, `matching.ts`, `command-utils.ts`,
-`extension.ts`) are private implementation and may be freely restructured.
+**Tests for a package's own logic (the matching engine, etc.) live inside
+the package**, as plain unit tests against its internals via relative
+imports (`packages/command-policy/matching.test.ts` imports `./matching.ts`
+directly — the `exports` restriction only applies to imports from *outside*
+the package). Don't write tests that fake Pi's `ExtensionAPI` to drive the
+wired extension end-to-end; test the underlying functions directly instead.
+Tests for *this repo's own* configuration (e.g. `COMMAND_POLICY_ENTRIES` in
+`pi/extensions/command-policy/logic.ts`) live in the extension.
 
-**A `packages/*` package must not depend on any other `@vt-pi/*` workspace
-package** (only on external deps like `@mariozechner/pi-coding-agent`, which
-is fine — Pi is the framework these extensions run in, not part of this
-repo's own internal layering). Depending on `@vt-pi/lib` would tie a package
-that's meant to stand on its own back to this monorepo's internal helpers.
-If a package needs something also used by `pi/lib/` or another extension
-(e.g. the shell-parsing helpers in `command-utils.ts`), duplicate that code
-into the package rather than importing it — see
-`packages/command-policy/command-utils.ts`, a deliberate copy of
-`pi/lib/command-utils.ts`'s parsing logic.
+A package that needs a real external dependency (e.g.
+`@mariozechner/pi-coding-agent`, which `createCommandPolicyExtension` needs
+for `ExtensionAPI`/`isToolCallEventType`) just declares it normally in that
+package's `package.json` `dependencies` — same as any npm package. `pi/lib/`
+still must not depend on any `@vt-pi/*` workspace package or on Pi; if a
+package needs something `pi/lib/` also has (e.g. the shell-parsing helpers
+in `command-utils.ts`), duplicate that code into the package rather than
+importing it — see `packages/command-policy/command-utils.ts`, a deliberate
+copy of `pi/lib/command-utils.ts`'s parsing logic.
 
-`flake.nix`'s `piCustomizations` and `pi` derivations wire up each
-`@vt-pi/*` workspace package as a symlink under `node_modules/@vt-pi/` —
-equivalent to what `npm install` would produce for these
-zero-external-dependency workspace members, without needing network access
-mid-build. Adding a new package requires a matching `ln -s` line in both
-derivations.
+`flake.nix`'s `workspaceDeps` derivation runs a real, hash-pinned `npm
+install` against the root workspace (same `buildNpmPackage` + `npmDepsHash`
+pattern `piBase` uses for its own deps) to resolve real external
+dependencies declared by any workspace package. `piCustomizations` copies
+that `node_modules`, then replaces the `@vt-pi/*` entries (which
+`workspaceDeps` dereferenced from its own copy of the repo, at a different
+directory shape) with symlinks matching `piCustomizations`'s own flattened
+`$out/{lib,extensions,packages}` layout. The final `pi` derivation reuses
+`piCustomizations`'s already-assembled `node_modules` as-is. Adding a new
+`@vt-pi/*` package requires a matching `ln -s` line in `piCustomizations`;
+adding a package with a new external dependency just needs
+`npmDepsHash` regenerated (`nix build 2>&1 | awk '/got:/{print $2}'`).
 
 ## Test files
 

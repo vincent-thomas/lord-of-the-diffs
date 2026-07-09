@@ -238,6 +238,37 @@
           };
         };
 
+        # ── npm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
+        # ── plus the @vt-pi/* workspace links npm sets up automatically) ──────
+        workspaceDeps = pkgs.buildNpmPackage {
+          pname = "vt-pi-workspace-deps";
+          version = "0.0.0";
+
+          src = ./.;
+
+          # Hash covers all npm deps declared in the root package-lock.json.
+          # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
+          npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+          inherit nodejs;
+
+          # No build step for these workspace members — just install deps.
+          # --ignore-scripts avoids native compilation for transitive deps
+          # (e.g. photon-node), same reasoning as piBase above.
+          dontNpmBuild = true;
+          npmFlags = [ "--ignore-scripts" ];
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out
+            # -L dereferences the @vt-pi/* workspace symlinks npm creates so
+            # this derivation's node_modules is fully self-contained — no
+            # dangling symlinks back into this build's own (different) tree.
+            cp -rL node_modules $out/
+            runHook postInstall
+          '';
+        };
+
         # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
         piCustomizations =
           pkgs.runCommand "pi-customizations"
@@ -260,13 +291,19 @@
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
 
-              # Wire up npm workspace packages (@vt-pi/lib, @vt-pi/command-policy, …)
-              # as plain symlinks under node_modules — equivalent to what `npm
-              # install` would produce for these zero-external-dependency
-              # workspace members, without needing network access mid-build.
+              # Real npm deps (@mariozechner/pi-coding-agent, …) from
+              # workspaceDeps. Its @vt-pi/* entries were dereferenced from a
+              # differently-shaped tree (this repo's own pi/lib, pi/extensions/*,
+              # packages/* layout) so they don't match this derivation's
+              # flattened $out/{lib,extensions,packages}; replace them with
+              # symlinks that do.
+              cp -r ${workspaceDeps}/node_modules $out/node_modules
+              chmod -R u+w $out/node_modules
+              rm -rf $out/node_modules/@vt-pi
               mkdir -p $out/node_modules/@vt-pi
               ln -s ../../lib $out/node_modules/@vt-pi/lib
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
+              ln -s ../../extensions/command-policy $out/node_modules/@vt-pi/ext-command-policy
 
               # Run tests on lib
               for test in $out/lib/*.test.ts; do
@@ -331,11 +368,10 @@
               cp -r ${piCustomizations}/skills $out/share/pi/skills
               cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
 
-              # Same @vt-pi/* workspace symlinks as piCustomizations, so
-              # extensions can resolve them at runtime too.
-              mkdir -p $out/share/pi/node_modules/@vt-pi
-              ln -s ../../lib $out/share/pi/node_modules/@vt-pi/lib
-              ln -s ../../packages/command-policy $out/share/pi/node_modules/@vt-pi/command-policy
+              # Same node_modules (real deps + @vt-pi/* workspace symlinks) as
+              # piCustomizations, so extensions can resolve them at runtime too.
+              cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
+              chmod -R u+w $out/share/pi/node_modules
 
               # Build --extension / --skill flags for every bundled item.
               # Skip test files (*.test.ts) - they're for build-time validation only.
