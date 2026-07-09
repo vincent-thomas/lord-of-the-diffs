@@ -3,7 +3,7 @@
  *
  * Pure functions — no Pi imports allowed.
  */
-import { splitCommandSegments, commandInvocation } from "../../lib/command-utils.ts";
+import { splitCommandSegments, commandInvocation, OBFUSCATED } from "../../lib/command-utils.ts";
 
 /**
  * List of banned folder names. Any path whose segments contain one of these
@@ -39,7 +39,10 @@ export function findBannedFolderTarget(
 ): string | null {
 	for (const segment of splitCommandSegments(command)) {
 		const inv = commandInvocation(segment);
-		if (!inv) continue;
+		// Obfuscated invocations (quoted command name/flag) aren't resolvable
+		// to a name or path here, so there's nothing folder-specific to check —
+		// they're denied outright by the command-policy allowlist instead.
+		if (!inv || inv === OBFUSCATED) continue;
 		if (!FILE_MANIP_COMMANDS.has(inv.name)) continue;
 		for (const arg of inv.args) {
 			if (arg.startsWith("-")) continue;

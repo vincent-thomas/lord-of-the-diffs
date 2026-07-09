@@ -15,6 +15,8 @@ import {
 	isPythonCommand,
 	leadingCommand,
 	splitCommandSegments,
+	hasDisguisedFlag,
+	OBFUSCATED,
 } from "../../lib/command-utils.ts";
 import {
 	matchesEntry,
@@ -25,11 +27,13 @@ import {
 	getCommandUses,
 	type CommandUse,
 } from "../../lib/ban-command-logic.ts";
-import { hasDisguisedFlag } from "../../lib/command-utils.ts";
 
 function commandNames(text: string): string[] {
 	return splitCommandSegments(text)
-		.map((segment) => commandInvocation(segment)?.name)
+		.map((segment) => {
+			const inv = commandInvocation(segment);
+			return inv && inv !== OBFUSCATED ? inv.name : undefined;
+		})
 		.filter((name): name is string => Boolean(name));
 }
 
@@ -421,6 +425,37 @@ test("git rm with a quoted recursive flag is caught by hasDisguisedFlag (bypass 
 	assert.equal(entry?.name, "git rm");
 	assert.equal(findBannedFlag(use, entry!), null);
 	assert.equal(hasDisguisedFlag(use.args), true);
+});
+
+// End-to-end: getCommandUses is the actual function createCommandPolicyExtension
+// calls on every bash tool_call, so these exercise the full parser -> policy
+// pipeline rather than a hand-built CommandUse.
+suite("getCommandUses — obfuscated invocations flagged for denial");
+
+test("quoted flag produces an obfuscated use", () => {
+	const [use] = getCommandUses('rm "-rf" dir/');
+	assert.equal(use.obfuscated, true);
+});
+
+test("quoted command name produces an obfuscated use", () => {
+	const [use] = getCommandUses('"git" commit -m x');
+	assert.equal(use.obfuscated, true);
+});
+
+test("quoted git subcommand-adjacent wrapper produces an obfuscated use", () => {
+	const [use] = getCommandUses('"sudo" git push');
+	assert.equal(use.obfuscated, true);
+});
+
+test("clean commands are never marked obfuscated", () => {
+	const uses = getCommandUses("git status --short && rg foo");
+	assert.ok(uses.every((u) => !u.obfuscated));
+});
+
+test("a legitimately quoted commit message is not marked obfuscated", () => {
+	const [use] = getCommandUses('git commit -m "fix bug"');
+	assert.equal(use.obfuscated, undefined);
+	assert.equal(use.name, "git");
 });
 
 test("can explicitly ban entries with model guidance", () => {

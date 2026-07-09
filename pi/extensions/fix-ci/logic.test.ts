@@ -53,10 +53,24 @@ suite("isGitPushLine — blocked", () => {
 		"env git push",
 		"/usr/bin/git push origin main",
 		"\\git push",
+		// Quoted command name — `"git"` runs identically to `git` once the
+		// shell strips the quotes, but used to slip past the `inv.name ===
+		// "git"` check. commandInvocation now returns the OBFUSCATED sentinel
+		// for this, and isGitSubcommand treats that as a match (fail closed).
+		'"git" push',
+		"'git' push",
 	];
 	for (const c of cases) {
 		test(JSON.stringify(c), () => assert.ok(isGitPushLine(c)));
 	}
+});
+
+test("obfuscated command is treated as a git-push match even when unrelated — defense in depth", () => {
+	// isGitSubcommand can't tell what an obfuscated segment actually invokes,
+	// so it conservatively matches every subcommand check it's used for. The
+	// command-policy allowlist is expected to be the primary, precisely-worded
+	// gate for cases like this; this is a backstop, not the main UX path.
+	assert.ok(isGitPushLine('rm "-rf" dir/'));
 });
 
 suite("isGitPushLine — allowed", () => {

@@ -166,16 +166,83 @@ export function splitCommandSegments(text: string): string[] {
 }
 
 /**
+ * Sentinel returned by {@link commandInvocation} when a segment's command
+ * name or a flag-shaped argument is wrapped in quotes for no syntactic
+ * reason — e.g. `"git"` or `"-rf"`. Shells strip matching quotes before
+ * exec, so these run identically to their unquoted form; quoting them has
+ * no effect except defeating string-based policy checks.
+ *
+ * Distinct from `null` ("this segment runs nothing") so callers can't
+ * mistake "couldn't resolve, and possibly not safe" for "there's nothing
+ * here to worry about" — every caller of commandInvocation must handle
+ * OBFUSCATED explicitly (typically: deny the command).
+ *
+ * We deliberately don't try to unquote and keep matching through this: a
+ * shell offers unlimited ways to write an equivalent token (quoting,
+ * `$''`, backslash-per-character, concatenation, …), and chasing each one
+ * as it's discovered is a losing game — this project's history is a series
+ * of exactly these bypass-then-patch fixes. A legitimate command has no
+ * reason to quote a bareword command name or a flag, so any command that
+ * does is rejected at the parser step rather than passed on to callers
+ * that would otherwise have to reason about what it actually resolves to.
+ */
+export const OBFUSCATED = "obfuscated" as const;
+export type ObfuscatedCommand = typeof OBFUSCATED;
+
+/**
+ * True if `tok`, unwrapped of its surrounding quotes, is a plain bareword —
+ * i.e. quoting it was syntactically pointless (no whitespace or shell
+ * metacharacters inside that would actually require quoting). This is the
+ * shape of a command name, wrapper name, or flag that's been quoted purely
+ * to dodge literal-string matching, e.g. `"git"` or `"-rf"`.
+ *
+ * Not applied to ordinary argument values (commit messages, search terms,
+ * filenames with spaces, …) — those are legitimately quoted and out of
+ * scope for this check; only the leading command word and flag-shaped
+ * tokens are.
+ */
+export function isPointlessQuoting(tok: string): boolean {
+	if (tok.length < 3) return false;
+	const q = tok[0];
+	if (q !== '"' && q !== "'") return false;
+	if (tok[tok.length - 1] !== q) return false;
+	const inner = tok.slice(1, -1);
+	if (inner.length === 0) return false;
+	return !/[\s'"$`\\;&|<>(){}*?[\]!#~]/.test(inner);
+}
+
+/**
+ * True if `tok` is a flag hidden inside a quote pair, e.g. `"-rf"` or
+ * `'-r'` — pointless quoting (see {@link isPointlessQuoting}) whose inner
+ * content starts with `-`.
+ */
+export function isQuoteDisguisedFlag(tok: string): boolean {
+	return isPointlessQuoting(tok) && tok[1] === "-";
+}
+
+/** True if any arg in `args` is a flag disguised inside quotes (see {@link isQuoteDisguisedFlag}). */
+export function hasDisguisedFlag(args: string[]): boolean {
+	return args.some(isQuoteDisguisedFlag);
+}
+
+/**
  * Resolve the actual command a single segment invokes: its executable name
  * (lowercased basename) plus the raw argument tokens that follow. Skips
  * leading environment assignments and command wrappers (sudo, env, …).
- * Returns null when the segment runs nothing.
+ *
+ * Returns:
+ *  - `null` when the segment runs nothing (empty, only env assignments, …)
+ *  - {@link OBFUSCATED} when the command name or a flag is pointlessly
+ *    quoted (see {@link isPointlessQuoting}) — callers must treat this as
+ *    "deny", not "nothing to see here"
+ *  - otherwise the resolved `{ name, args }`
  */
-export function commandInvocation(segment: string): { name: string; args: string[] } | null {
+export function commandInvocation(segment: string): { name: string; args: string[] } | null | ObfuscatedCommand {
 	const tokens = segment.trim().split(/\s+/).filter(Boolean);
 	let i = 0;
 	while (i < tokens.length) {
 		let tok = tokens[i];
+		if (isPointlessQuoting(tok)) return OBFUSCATED;
 		if (tok.startsWith("\\")) tok = tok.slice(1); // `\cat` bypasses aliases
 		if (ENV_ASSIGN.test(tok)) {
 			i++;
@@ -196,23 +263,30 @@ export function commandInvocation(segment: string): { name: string; args: string
 			}
 			continue;
 		}
-		return { name: base, args: tokens.slice(i + 1) };
+		const args = tokens.slice(i + 1);
+		if (hasDisguisedFlag(args)) return OBFUSCATED;
+		return { name: base, args };
 	}
 	return null;
 }
 
 /**
  * Return the executable name (lowercased basename) that a single command
- * segment invokes. Returns null when the segment runs nothing.
+ * segment invokes. Returns null when the segment runs nothing, or when the
+ * invocation is obfuscated (see {@link OBFUSCATED}) — callers that need to
+ * fail closed on obfuscation should call {@link commandInvocation} directly.
  */
 export function leadingCommand(segment: string): string | null {
-	return commandInvocation(segment)?.name ?? null;
+	const inv = commandInvocation(segment);
+	return inv && inv !== OBFUSCATED ? inv.name : null;
 }
 
 /**
  * Scan a shell command string for any invocation matching `match` (either a
  * set of command names or a predicate). Returns the matched command name and
- * the offending segment, or null.
+ * the offending segment, or null. Obfuscated invocations always match —
+ * this scans specifically for dangerous commands, so a segment we can't
+ * confidently resolve is treated as a potential hit rather than skipped.
  */
 export function findCommandUse(
 	text: string,
@@ -220,39 +294,13 @@ export function findCommandUse(
 ): { name: string; segment: string } | null {
 	const test = typeof match === "function" ? match : (c: string) => match.has(c);
 	for (const seg of splitCommandSegments(text)) {
-		const cmd = leadingCommand(seg);
-		if (cmd && test(cmd)) {
-			return { name: cmd, segment: seg.trim() };
+		const inv = commandInvocation(seg);
+		if (inv === OBFUSCATED) return { name: OBFUSCATED, segment: seg.trim() };
+		if (inv && test(inv.name)) {
+			return { name: inv.name, segment: seg.trim() };
 		}
 	}
 	return null;
-}
-
-/**
- * True if `tok` is a flag hidden inside a quote pair, e.g. `"-rf"` or
- * `'-r'`. Shells strip matching quotes before exec, so `"-rf"` runs
- * identically to `-rf` — quoting it has no effect except defeating
- * flag-prefix checks like `arg.startsWith("-")`.
- *
- * We deliberately don't try to unquote and keep matching through this:
- * shells offer unlimited ways to write an equivalent token (quoting,
- * `$''`, backslash-per-character, concatenation, …), and chasing each one
- * as it's discovered is a losing game — the project's history is a series
- * of exactly these bypass-then-patch fixes. Instead, callers should treat
- * a disguised flag as reason to deny the whole command outright: legitimate
- * commands have no reason to wrap a flag in quotes.
- */
-export function isQuoteDisguisedFlag(tok: string): boolean {
-	if (tok.length < 3) return false;
-	const first = tok[0];
-	if (first !== '"' && first !== "'") return false;
-	if (tok[tok.length - 1] !== first) return false;
-	return tok[1] === "-";
-}
-
-/** True if any arg in `args` is a flag disguised inside quotes (see {@link isQuoteDisguisedFlag}). */
-export function hasDisguisedFlag(args: string[]): boolean {
-	return args.some(isQuoteDisguisedFlag);
 }
 
 /** Matches `python`, `python2`, `python3`, `python3.12`, etc. */

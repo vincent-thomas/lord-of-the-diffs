@@ -9,6 +9,14 @@ export interface CommandUse {
 	name: string;
 	segment: string;
 	args: string[];
+	/**
+	 * True when the underlying invocation could not be cleanly resolved
+	 * because its command name or a flag was pointlessly quoted (e.g.
+	 * `"git"`, `"-rf"`) — see command-utils.ts's OBFUSCATED sentinel.
+	 * `name`/`args` are placeholders in this case; callers must deny the
+	 * command outright rather than match it against policy entries.
+	 */
+	obfuscated?: boolean;
 }
 
 type CommandPolicyEntryBase = {

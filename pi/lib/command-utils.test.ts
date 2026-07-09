@@ -7,8 +7,11 @@ import {
 	splitCommandSegments,
 	commandInvocation,
 	leadingCommand,
+	findCommandUse,
+	isPointlessQuoting,
 	isQuoteDisguisedFlag,
 	hasDisguisedFlag,
+	OBFUSCATED,
 } from "./command-utils.ts";
 
 // ── splitCommandSegments ────────────────────────────────────────────────────
@@ -129,36 +132,94 @@ test("does not split on operators inside single quotes", () => {
 
 suite("commandInvocation");
 
+/** Narrow past the OBFUSCATED sentinel for tests that expect a clean resolution. */
+function resolved(segment: string) {
+	const inv = commandInvocation(segment);
+	assert.ok(inv && inv !== OBFUSCATED, `expected a resolved invocation for ${JSON.stringify(segment)}`);
+	return inv;
+}
+
 test("resolves simple command", () => {
-	const inv = commandInvocation("ls -la");
-	assert.ok(inv);
+	const inv = resolved("ls -la");
 	assert.equal(inv.name, "ls");
 	assert.deepEqual(inv.args, ["-la"]);
 });
 
 test("strips leading path from executable", () => {
-	const inv = commandInvocation("/bin/ls -la");
-	assert.ok(inv);
-	assert.equal(inv.name, "ls");
+	assert.equal(resolved("/bin/ls -la").name, "ls");
 });
 
 test("skips env assignments", () => {
-	const inv = commandInvocation("FOO=bar ls -la");
-	assert.ok(inv);
-	assert.equal(inv.name, "ls");
+	assert.equal(resolved("FOO=bar ls -la").name, "ls");
 });
 
 test("skips sudo wrapper", () => {
-	const inv = commandInvocation("sudo git status");
-	assert.ok(inv);
+	const inv = resolved("sudo git status");
 	assert.equal(inv.name, "sudo");
 	assert.deepEqual(inv.args, ["git", "status"]);
 });
 
 test("resolves through env to real command", () => {
-	const inv = commandInvocation("env ls -la");
-	assert.ok(inv);
-	assert.equal(inv.name, "ls");
+	assert.equal(resolved("env ls -la").name, "ls");
+});
+
+// ── commandInvocation — OBFUSCATED (quoted command name / flag) ────────────
+//
+// Detection lives at the parser step (here) rather than in individual policy
+// consumers: a bareword command name or flag has no legitimate reason to be
+// wrapped in quotes — `"git"` and `"-rf"` run identically to `git` and
+// `-rf` once the shell strips the quotes, so quoting only serves to dodge
+// string-based checks. commandInvocation returns the OBFUSCATED sentinel
+// (distinct from `null`, which means "nothing runs here") so every caller
+// is forced to handle it explicitly instead of silently skipping it.
+
+suite("commandInvocation — OBFUSCATED");
+
+test("quoted command name is obfuscated", () => {
+	assert.equal(commandInvocation('"git" commit -m x'), OBFUSCATED);
+});
+
+test("single-quoted command name is obfuscated", () => {
+	assert.equal(commandInvocation("'rm' -rf /"), OBFUSCATED);
+});
+
+test("quoted wrapper name is obfuscated", () => {
+	assert.equal(commandInvocation('"sudo" git push'), OBFUSCATED);
+});
+
+test("quoted flag is obfuscated even with a clean command name", () => {
+	assert.equal(commandInvocation('rm "-rf" dir/'), OBFUSCATED);
+});
+
+test("quoted flag after a wrapper is obfuscated", () => {
+	assert.equal(commandInvocation('nice "-n" 10 rg needle'), OBFUSCATED);
+});
+
+test("path-prefixed quoted command name is obfuscated", () => {
+	assert.equal(commandInvocation('"/bin/rm" -rf /'), OBFUSCATED);
+});
+
+test("quoted commit message is NOT obfuscated — legitimate value quoting", () => {
+	// Note: commandInvocation tokenizes on whitespace without being
+	// quote-aware, so a multi-word quoted value is fragmented into several
+	// tokens — none of which is itself fully quote-wrapped, so none look
+	// like a disguised flag or command name.
+	const inv = commandInvocation('git commit -m "fix bug"');
+	assert.ok(inv && inv !== OBFUSCATED);
+	assert.equal(inv.name, "git");
+	assert.deepEqual(inv.args, ["commit", "-m", '"fix', 'bug"']);
+});
+
+test("quoted single-word value is NOT obfuscated — not a flag or command position", () => {
+	const inv = commandInvocation('git commit -m "wip"');
+	assert.ok(inv && inv !== OBFUSCATED);
+});
+
+test("quoted value containing shell metacharacters is NOT obfuscated", () => {
+	// Single whitespace-free token, so it's not fragmented by the naive
+	// whitespace tokenizer — genuinely tests the metacharacter guard.
+	const inv = commandInvocation('echo "$(whoami)"');
+	assert.ok(inv && inv !== OBFUSCATED);
 });
 
 // ── leadingCommand ──────────────────────────────────────────────────────────
@@ -175,6 +236,53 @@ test("returns null for empty segment", () => {
 
 test("returns null for env assignment only", () => {
 	assert.equal(leadingCommand("FOO=bar"), null);
+});
+
+test("returns null for obfuscated invocation", () => {
+	assert.equal(leadingCommand('"git" push'), null);
+});
+
+// ── findCommandUse — obfuscated segments always match ───────────────────────
+
+suite("findCommandUse — OBFUSCATED");
+
+test("obfuscated segment matches any search — treated as a potential hit, not skipped", () => {
+	const hit = findCommandUse('"git" push', new Set(["git"]));
+	assert.deepEqual(hit, { name: OBFUSCATED, segment: '"git" push' });
+});
+
+test("clean non-matching segment still returns null", () => {
+	assert.equal(findCommandUse("ls -la", new Set(["git"])), null);
+});
+
+// ── isPointlessQuoting ───────────────────────────────────────────────────────
+
+suite("isPointlessQuoting");
+
+test("quoted bareword is pointless", () => {
+	assert.equal(isPointlessQuoting('"git"'), true);
+	assert.equal(isPointlessQuoting("'rm'"), true);
+});
+
+test("quoted value with whitespace is not pointless", () => {
+	assert.equal(isPointlessQuoting('"fix bug"'), false);
+});
+
+test("quoted value with shell metacharacters is not pointless", () => {
+	assert.equal(isPointlessQuoting('"a && b"'), false);
+	assert.equal(isPointlessQuoting('"$(whoami)"'), false);
+});
+
+test("mismatched quotes are not pointless quoting", () => {
+	assert.equal(isPointlessQuoting("\"git'"), false);
+});
+
+test("empty quotes are not pointless quoting", () => {
+	assert.equal(isPointlessQuoting('""'), false);
+});
+
+test("unquoted token is not pointless quoting", () => {
+	assert.equal(isPointlessQuoting("git"), false);
 });
 
 // ── isQuoteDisguisedFlag / hasDisguisedFlag ─────────────────────────────────
