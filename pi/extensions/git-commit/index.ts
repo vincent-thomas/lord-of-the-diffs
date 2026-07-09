@@ -13,7 +13,7 @@ import { Type } from "@sinclair/typebox";
 import { currentBranch } from "../../lib/git-utils.ts";
 import { isDefaultBranch, hasUpstreamBranch, branchExistsOnRemote } from "./logic.ts";
 import { runPreChecks, gitCommit } from "./logic.ts";
-import { execAsync } from "../../lib/exec-async.ts";
+import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
 
 export default function (pi: ExtensionAPI) {
 	// ── Tool: git_commit ──────────────────────────────────────────────────────
@@ -117,12 +117,11 @@ export default function (pi: ExtensionAPI) {
 				try {
 					await execAsync("git add -A", { cwd, timeout: 15_000, signal });
 				} catch (err: unknown) {
-					const output = err instanceof Error ? err.message : String(err);
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Staging failed:\n\`\`\`\n${output}\n\`\`\``,
+								text: `Staging failed:\n\`\`\`\n${extractErrorOutput(err)}\n\`\`\``,
 							},
 						],
 					};
