@@ -21,6 +21,7 @@ Run `nix build` or `nix run` to get the final customized pi binary.
 vt-pi/
 ├── flake.nix                  # The build — all packaging logic lives here
 ├── flake.lock
+├── Makefile                   # Defines what "valid" means for pre-checks
 ├── package.json               # Root npm workspace (pi, packages/*)
 ├── packages/                  # Standalone @vt-pi/* npm packages, promoted out of pi/lib
 │   └── command-policy/        # @vt-pi/command-policy — shell command allow-list engine
