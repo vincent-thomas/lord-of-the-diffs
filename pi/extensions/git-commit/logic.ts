@@ -4,8 +4,6 @@
  * Uses shared helpers from lib for pre-checks, async exec, and git utilities.
  */
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
-import { runPreChecks } from "../../lib/precheck.ts";
-import { isDefaultBranch, hasUpstream as hasUpstreamBranch } from "../../lib/git-utils.ts";
 import { shellQuote } from "../../lib/shell-quote.ts";
 
 // Re-exports from lib so consumers (index.ts, tests) keep the same import path.
