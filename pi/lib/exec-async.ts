@@ -15,6 +15,12 @@ export interface ExecResult {
 	stderr: string;
 }
 
+/** An exec failure, with stdout/stderr attached so callers can show what the command actually printed. */
+export interface ExecError extends Error {
+	stdout: string;
+	stderr: string;
+}
+
 /**
  * Async exec that kills the child process when the signal fires.
  * Rejects on non-zero exit or timeout.
@@ -50,9 +56,10 @@ export function execAsync(
 				cleanup();
 				if (err) {
 					// Attach stdout/stderr to the error for callers that need them.
-					(err as any).stdout = stdout;
-					(err as any).stderr = stderr;
-					reject(err);
+					const execError = err as ExecError;
+					execError.stdout = stdout;
+					execError.stderr = stderr;
+					reject(execError);
 				} else {
 					resolve({ stdout: String(stdout), stderr: String(stderr) });
 				}
@@ -68,9 +75,10 @@ export function execAsync(
  * Prefers stderr, then stdout, falls back to toString.
  */
 export function extractErrorOutput(err: unknown): string {
-	if (err && typeof err === "object") {
-		if ("stderr" in err && (err as any).stderr) return String((err as any).stderr);
-		if ("stdout" in err && (err as any).stdout) return String((err as any).stdout);
+	if (err instanceof Error) {
+		const { stdout, stderr } = err as Partial<ExecError>;
+		if (stderr) return stderr;
+		if (stdout) return stdout;
 	}
 	return String(err);
 }
