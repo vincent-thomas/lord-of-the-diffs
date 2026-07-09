@@ -127,9 +127,7 @@ export default function (pi: ExtensionAPI) {
 
           if (!mergeResult.success) {
             if (mergeResult.conflictPaths.length > 0) {
-              const conflictList = mergeResult.conflictPaths
-                .map((p) => `- \`${p}\``)
-                .join("\n");
+              const conflictList = formatConflictList(mergeResult.conflictPaths);
 
               return {
                 content: [
@@ -230,9 +228,7 @@ export default function (pi: ExtensionAPI) {
             cycleCount = 0;
 
             if (pullResult.conflictPaths.length > 0) {
-              const conflictList = pullResult.conflictPaths
-                .map((p) => `- \`${p}\``)
-                .join("\n");
+              const conflictList = formatConflictList(pullResult.conflictPaths);
 
               return {
                 content: [
@@ -656,6 +652,10 @@ export default function (pi: ExtensionAPI) {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatConflictList(paths: string[]): string {
+  return paths.map((p) => `- \`${p}\``).join("\n");
+}
 
 function formatChecks(checks: CheckResult[]): string {
   return checks
