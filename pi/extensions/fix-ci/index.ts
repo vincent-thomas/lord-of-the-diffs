@@ -46,6 +46,89 @@ function respond(text: string, details: Record<string, unknown>) {
   return { content: [{ type: "text" as const, text }], details };
 }
 
+/**
+ * If the PR's base branch has moved ahead, merge it into the current branch
+ * before pushing (so CI tests the up-to-date branch, not a stale one).
+ * Returns a tool response to short-circuit `execute` with — on a missing
+ * branch name, a merge conflict, or a merge failure — or null to continue
+ * with the push when there was nothing to merge, or the merge succeeded.
+ */
+async function mergeBaseBranchIfAhead(
+  cwd: string,
+  signal: AbortSignal | undefined,
+  notify: (text: string) => void,
+): Promise<ReturnType<typeof respond> | null> {
+  const prBase = await getPrBaseBranch(cwd, signal);
+  if (!prBase) return null;
+
+  const baseAhead = await isBaseBranchAhead(cwd, prBase, signal);
+  if (!baseAhead) return null;
+
+  const branchName = await currentBranch(cwd, signal);
+  if (!branchName) {
+    return respond(
+      `Could not determine the current branch name. ` +
+        `Fix manually and try again.`,
+      { mergeFailed: true, error: "Unable to determine current branch" },
+    );
+  }
+
+  notify(`Merging ${prBase} into ${branchName} via worktree…`);
+
+  const mergeResult = await mergeBaseBranchIntoCurrent(cwd, prBase, branchName, signal);
+
+  if (!mergeResult.success) {
+    if (mergeResult.conflictPaths.length > 0) {
+      const conflictList = formatConflictList(mergeResult.conflictPaths);
+
+      return respond(
+        `## ⚠️ Merge Conflicts Detected\n\n` +
+          `The PR branch \`${branchName}\` has conflicts with the base branch ` +
+          `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
+          `\`${branchName}\` but there are unresolved conflicts.\n\n` +
+          `### Conflicting files:\n${conflictList}\n\n` +
+          `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+          `### To resolve:\n` +
+          `1. Resolve the conflicts in the listed files\n` +
+          `2. \`git add\` the resolved files\n` +
+          `3. Commit the merge (the merge message is pre-filled)\n` +
+          `4. Run \`push_and_check_ci\` again`,
+        {
+          mergeConflict: true,
+          baseBranch: prBase,
+          currentBranch: branchName,
+          conflictPaths: mergeResult.conflictPaths,
+          mergeOutput: mergeResult.output,
+        },
+      );
+    }
+
+    // Merge failed but no conflicts — likely a tooling or network error.
+    return respond(
+      `## ⚠️ Merge Failed\n\n` +
+        `Failed to merge \`${prBase}\` into \`${branchName}\`. ` +
+        `No merge conflicts were detected — this is likely a ` +
+        `transient tooling issue (e.g. network or auth).\n\n` +
+        `### Error output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+        `Try running \`push_and_check_ci\` again. ` +
+        `If the problem persists, merge \`${prBase}\` into your branch manually ` +
+        `(\`git fetch origin ${prBase} && git merge origin/${prBase}\`).`,
+      {
+        mergeFailed: true,
+        baseBranch: prBase,
+        currentBranch: branchName,
+        errorOutput: mergeResult.output,
+      },
+    );
+  }
+
+  notify(
+    `Successfully merged \`${prBase}\` into \`${branchName}\` ` +
+      `without conflicts. Proceeding with push…`,
+  );
+  return null;
+}
+
 export default function (pi: ExtensionAPI) {
   let cycleCount = 0;
 
@@ -85,80 +168,8 @@ export default function (pi: ExtensionAPI) {
       // ── 1. Check if base branch is ahead — merge if so ─────────────
       // Keep the PR branch up to date with the base branch before pushing
       // and running CI. This prevents CI from testing a stale branch.
-      const branchName = await currentBranch(cwd, signal);
-      const prBase = await getPrBaseBranch(cwd, signal);
-
-      if (prBase) {
-        const baseAhead = await isBaseBranchAhead(cwd, prBase, signal);
-        if (baseAhead) {
-          if (!branchName) {
-            return respond(
-              `Could not determine the current branch name. ` +
-                `Fix manually and try again.`,
-              { mergeFailed: true, error: "Unable to determine current branch" },
-            );
-          }
-
-          notify(`Merging ${prBase} into ${branchName} via worktree…`);
-
-          const mergeResult = await mergeBaseBranchIntoCurrent(
-            cwd,
-            prBase,
-            branchName,
-            signal,
-          );
-
-          if (!mergeResult.success) {
-            if (mergeResult.conflictPaths.length > 0) {
-              const conflictList = formatConflictList(mergeResult.conflictPaths);
-
-              return respond(
-                `## ⚠️ Merge Conflicts Detected\n\n` +
-                  `The PR branch \`${branchName}\` has conflicts with the base branch ` +
-                  `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
-                  `\`${branchName}\` but there are unresolved conflicts.\n\n` +
-                  `### Conflicting files:\n${conflictList}\n\n` +
-                  `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
-                  `### To resolve:\n` +
-                  `1. Resolve the conflicts in the listed files\n` +
-                  `2. \`git add\` the resolved files\n` +
-                  `3. Commit the merge (the merge message is pre-filled)\n` +
-                  `4. Run \`push_and_check_ci\` again`,
-                {
-                  mergeConflict: true,
-                  baseBranch: prBase,
-                  currentBranch: branchName,
-                  conflictPaths: mergeResult.conflictPaths,
-                  mergeOutput: mergeResult.output,
-                },
-              );
-            }
-
-            // Merge failed but no conflicts — likely a tooling or network error.
-            return respond(
-              `## ⚠️ Merge Failed\n\n` +
-                `Failed to merge \`${prBase}\` into \`${branchName}\`. ` +
-                `No merge conflicts were detected — this is likely a ` +
-                `transient tooling issue (e.g. network or auth).\n\n` +
-                `### Error output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
-                `Try running \`push_and_check_ci\` again. ` +
-                `If the problem persists, merge \`${prBase}\` into your branch manually ` +
-                `(\`git fetch origin ${prBase} && git merge origin/${prBase}\`).`,
-              {
-                mergeFailed: true,
-                baseBranch: prBase,
-                currentBranch: branchName,
-                errorOutput: mergeResult.output,
-              },
-            );
-          }
-
-          notify(
-            `Successfully merged \`${prBase}\` into \`${branchName}\` ` +
-              `without conflicts. Proceeding with push…`,
-          );
-        }
-      }
+      const mergeBlock = await mergeBaseBranchIfAhead(cwd, signal, notify);
+      if (mergeBlock) return mergeBlock;
 
       // ── 2. Check if there's something to push ──────────────────────
       const hasSomethingToPush = await needsPush(cwd, signal);
