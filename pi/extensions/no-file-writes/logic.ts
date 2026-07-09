@@ -15,7 +15,7 @@ export function hasFileWriteRedirection(command: string): { found: boolean; segm
 	// \s* allows both "> file" and ">file" (no space — valid in bash).
 	// (?:>>|>(?!>)) prevents >> from backtracking to > and letting the
 	// second > leak into the filename.
-	const pattern = /(?:^|\s)\d*(?:>>|>(?!>))\s*(?!\/dev\/|&[12]\b)(\S+)/g;
+	const pattern = /(?:^|\s)\d*(?:>>|>(?!>))\s*(?!\/dev\/|&[12]\b)(?:\S+)/;
 	const match = pattern.exec(command);
 
 	if (match) {
