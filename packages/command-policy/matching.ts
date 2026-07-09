@@ -96,8 +96,13 @@ export function findDisallowedFlag(use: CommandUse, entry: CommandPolicyEntry): 
 	}
 
 	for (const flag of commandFlags(use)) {
-		if (isCombinedShortFlag(flag)) {
-			if (shortFlagChars(flag).some((ch) => !allowedChars.has(ch))) return flag;
+		// Strip a trailing `=value` before checking for a combined short flag, so a
+		// disallowed char can't be smuggled in behind `=` (e.g. `-sv=val` bundling
+		// disallowed `-v` with allowed `-s`) — isCombinedShortFlag alone rejects
+		// anything containing `=`, which would otherwise skip the char-by-char check.
+		const body = flag.includes("=") ? flag.slice(0, flag.indexOf("=")) : flag;
+		if (isCombinedShortFlag(body)) {
+			if (shortFlagChars(body).some((ch) => !allowedChars.has(ch))) return flag;
 			continue;
 		}
 		if (!entry.allowedFlags.some((allowed) => flagMatches(flag, allowed))) return flag;
