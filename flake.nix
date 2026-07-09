@@ -252,6 +252,10 @@
 
           inherit nodejs;
 
+          # git is needed on PATH for the checkPhase below — several tests
+          # (git-commit, fix-ci) shell out to a real `git` binary.
+          nativeBuildInputs = [ pkgs.git ];
+
           # No build step for these workspace members — just install deps.
           # --ignore-scripts avoids native compilation for transitive deps
           # (e.g. photon-node), same reasoning as piBase above.
