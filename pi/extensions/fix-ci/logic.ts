@@ -1110,6 +1110,7 @@ export interface ReviewComment {
 	pullRequestReviewId: number;
 	path: string;
 	line: number | null;
+	startLine: number | null; // start of a multi-line comment range; null for single-line comments
 	body: string;
 	author: string;
 }
@@ -1152,6 +1153,23 @@ async function fetchPrReviews(
 	}
 }
 
+/**
+ * Map raw `gh api` review-comment JSON into ReviewComment objects.
+ * Pulled out from fetchCommentsForReview so the mapping is unit-testable
+ * without mocking `gh`.
+ */
+export function parseReviewComments(raw: unknown, reviewId: number): ReviewComment[] {
+	return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
+		id: c.id as number,
+		pullRequestReviewId: reviewId,
+		path: c.path as string ?? "",
+		line: c.line as number ?? null,
+		startLine: (c.start_line as number) ?? null,
+		body: c.body as string ?? "",
+		author: (c.user as Record<string, unknown>)?.login as string ?? "unknown",
+	}));
+}
+
 async function fetchCommentsForReview(
 	cwd: string,
 	prNumber: number | null,
@@ -1166,15 +1184,7 @@ async function fetchCommentsForReview(
 		);
 		if (!stdout.trim()) return [];
 		const raw = JSON.parse(stdout.trim());
-		return (Array.isArray(raw) ? raw : []).map((c: Record<string, unknown>) => ({
-			id: c.id as number,
-			pullRequestReviewId: reviewId,
-			path: c.path as string ?? "",
-			line: c.line as number ?? null,
-			startLine: (c.start_line as number) ?? null,
-			body: c.body as string ?? "",
-			author: (c.user as Record<string, unknown>)?.login as string ?? "unknown",
-		}));
+		return parseReviewComments(raw, reviewId);
 	} catch {
 		return [];
 	}
