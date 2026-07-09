@@ -282,7 +282,7 @@
               mkdir -p $out/extensions $out/lib $out/skills $out/packages
 
               # Copy extensions + lib + packages so ../lib/ imports and
-              # @vt-pi/* package imports both work
+              # @vt-pi/command-policy imports both work
               cp -r ${./pi/extensions}/. $out/extensions/
               cp -r ${./pi/lib}/. $out/lib/
               cp -r ${./packages}/. $out/packages/
@@ -292,18 +292,18 @@
               cp ${./pi/AGENTS.md} $out/AGENTS.md
 
               # Real npm deps (@mariozechner/pi-coding-agent, …) from
-              # workspaceDeps. Its @vt-pi/* entries were dereferenced from a
-              # differently-shaped tree (this repo's own pi/lib, pi/extensions/*,
-              # packages/* layout) so they don't match this derivation's
-              # flattened $out/{lib,extensions,packages}; replace them with
-              # symlinks that do.
+              # workspaceDeps. Its @vt-pi/command-policy entry was dereferenced
+              # from a differently-shaped tree (this repo's own packages/*
+              # layout) so it doesn't match this derivation's flattened
+              # $out/{lib,extensions,packages}; replace it with a symlink
+              # that does. (pi/ itself is a single workspace member — lib/
+              # and extensions/* reference each other with relative imports,
+              # no node_modules entry needed for it.)
               cp -r ${workspaceDeps}/node_modules $out/node_modules
               chmod -R u+w $out/node_modules
               rm -rf $out/node_modules/@vt-pi
               mkdir -p $out/node_modules/@vt-pi
-              ln -s ../../lib $out/node_modules/@vt-pi/lib
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
-              ln -s ../../extensions/command-policy $out/node_modules/@vt-pi/ext-command-policy
 
               # Run tests on lib
               for test in $out/lib/*.test.ts; do

@@ -21,10 +21,12 @@ Run `nix build` or `nix run` to get the final customized pi binary.
 vt-pi/
 ├── flake.nix                  # The build — all packaging logic lives here
 ├── flake.lock
-├── package.json               # Root npm workspace (pi/lib, pi/extensions/*, packages/*)
+├── package.json               # Root npm workspace (pi, packages/*)
 ├── packages/                  # Standalone @vt-pi/* npm packages, promoted out of pi/lib
 │   └── command-policy/        # @vt-pi/command-policy — shell command allow-list engine
-└── pi/                        # Everything that gets bundled into the package
+└── pi/                        # Everything that gets bundled into the package — a single
+    │                          # npm workspace member (@vt-pi/pi) covering both lib/ and
+    │                          # extensions/*; they reference each other with relative imports
     ├── AGENTS.md              # System prompt shipped with the binary
     ├── extensions/            # One subdirectory or .ts file per extension
     │   ├── command-policy/    # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
@@ -33,7 +35,7 @@ vt-pi/
     │   ├── sandbox/           # /sandbox command for read-only mode
     │   ├── no-file-writes/    # Blocks >, >> shell redirections to files
     │   └── write-guard/       # Blocks write on existing files > 50 lines
-    └── lib/                   # @vt-pi/lib — pure logic shared across extensions
+    └── lib/                   # Pure logic shared across extensions
         ├── command-utils.ts
         └── git-utils.ts
 ```
@@ -47,7 +49,9 @@ Pi `ExtensionAPI`. Extensions use three main APIs:
 - `pi.registerCommand(name, { handler })` — registers a slash command like `/sandbox`
 - `pi.on("tool_call" | "before_agent_start" | "agent_end", handler)` — lifecycle hooks
 
-The `pi/lib/` directory (npm package `@vt-pi/lib`) holds shared code. **No Pi
+The `pi/lib/` directory holds shared code, imported via relative paths (e.g.
+`../../lib/git-utils.ts`) since `pi/lib/` and `pi/extensions/*` are part of
+the same npm workspace member (`@vt-pi/pi`, `pi/package.json`). **No Pi
 imports allowed in lib/** — it must stay pure TypeScript so it can be
 imported from any extension's logic module. Extensions should keep Pi
 imports in `index.ts` and put testable logic in their own `logic.ts`.
@@ -55,18 +59,21 @@ imports in `index.ts` and put testable logic in their own `logic.ts`.
 ## npm workspaces and packages/
 
 The repo is an npm workspace (root `package.json`'s `workspaces` field covers
-`pi/lib`, every `pi/extensions/*`, and every `packages/*`). Workspace members
-are plain TypeScript with no build step — Node's native type-stripping runs
-`.ts` files directly, both in `nix build` and via `node --test`.
+`pi` — one member for the whole lib+extensions tree — and every
+`packages/*`). Workspace members are plain TypeScript with no build step —
+Node's native type-stripping runs `.ts` files directly, both in `nix build`
+and via `node --test`.
 
-`pi/lib/` is for logic shared across *this repo's* extensions. Promote code
-out of `pi/lib/` into its own `packages/<name>/` package when it's a
-self-contained feature with its own public API that's substantial enough to
-reason about independently — e.g. `@vt-pi/command-policy` bundles the shell
-command allow-list types, matching engine, and the Pi extension factory
-behind one entry point (`createCommandPolicyExtension`), rather than leaving
-that logic as loose files in `pi/lib/` alongside unrelated helpers like
-`git-utils.ts`.
+`pi/lib/` is for logic shared across *this repo's* extensions, referenced by
+relative import since it's in the same workspace member as the extensions
+that use it. Promote code out of `pi/lib/` into its own `packages/<name>/`
+package when it's a self-contained feature with its own public API that's
+substantial enough to reason about independently, and that other consumers
+outside this repo's own extensions might plausibly want — e.g.
+`@vt-pi/command-policy` bundles the shell command allow-list types, matching
+engine, and the Pi extension factory behind one entry point
+(`createCommandPolicyExtension`), rather than leaving that logic as loose
+files in `pi/lib/` alongside unrelated helpers like `git-utils.ts`.
 
 **A package encapsulates its functionality: `index.ts` is the only file in
 `package.json`'s `exports`, and it exports only the thing the package is
@@ -107,9 +114,11 @@ dependencies declared by any workspace package. `piCustomizations` copies
 that `node_modules`, then replaces the `@vt-pi/*` entries (which
 `workspaceDeps` dereferenced from its own copy of the repo, at a different
 directory shape) with symlinks matching `piCustomizations`'s own flattened
-`$out/{lib,extensions,packages}` layout. The final `pi` derivation reuses
+`$out/{lib,extensions,packages}` layout — today that's just
+`@vt-pi/command-policy`, since `pi/` is a single workspace member with no
+node_modules entry of its own. The final `pi` derivation reuses
 `piCustomizations`'s already-assembled `node_modules` as-is. Adding a new
-`@vt-pi/*` package requires a matching `ln -s` line in `piCustomizations`;
+`packages/*` package requires a matching `ln -s` line in `piCustomizations`;
 adding a package with a new external dependency just needs
 `npmDepsHash` regenerated (`nix build 2>&1 | awk '/got:/{print $2}'`).
 
