@@ -6,9 +6,13 @@
  *
  *   import createCommandPolicyExtension from "@vt-pi/command-policy";
  *   export default createCommandPolicyExtension({ entries: [...] });
+ *
+ * CommandPolicyEntry, the predicates (isPythonCommand, …), and the matching
+ * primitives (matchesEntry, findBannedFlag, …) needed to build and test
+ * entries are deliberately not re-exported here — importing them through
+ * this barrel would pull in extension.ts's @mariozechner/pi-coding-agent
+ * dependency. Import them from their own subpaths instead: ./types.ts,
+ * ./predicates.ts, ./matching.ts.
  */
 
 export { createCommandPolicyExtension as default, type CommandPolicyOptions } from "./extension.ts";
-export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./types.ts";
-export { isPythonCommand, isPerlCommand, isAwkCommand } from "./predicates.ts";
-export { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./matching.ts";
