@@ -196,7 +196,7 @@
             runHook postBuild
           '';
 
-          doCheck = false; # Tests run in piCustomizations derivation
+          doCheck = false; # Tests run in workspaceDeps derivation
 
           installPhase = ''
             runHook preInstall
@@ -269,6 +269,16 @@
             runHook postBuild
           '';
 
+          # Run the workspace test suite here, where the repo's real
+          # layout (root package.json + pi/ + packages/*) and freshly
+          # installed node_modules already match up — no copying needed.
+          doCheck = true;
+          checkPhase = ''
+            runHook preCheck
+            npm test --workspaces --if-present
+            runHook postCheck
+          '';
+
           installPhase = ''
             runHook preInstall
             mkdir -p $out
@@ -315,22 +325,6 @@
               rm -rf $out/node_modules/@vt-pi
               mkdir -p $out/node_modules/@vt-pi
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
-
-              # ── Run the workspace test suite ────────────────────────────
-              # Assemble a copy of the actual npm workspace (root
-              # package.json, pi/, packages/) and run `npm test
-              # --workspaces`, reusing workspaceDeps' node_modules — it was
-              # built from this same repo checkout, so its @vt-pi/* entries
-              # already match this layout (unlike the flattened
-              # $out/{lib,extensions,packages} above).
-              mkdir -p test-tree/pi test-tree/packages
-              cp ${./package.json} test-tree/package.json
-              cp -r ${./pi}/. test-tree/pi/
-              cp -r ${./packages}/. test-tree/packages/
-              chmod -R u+w test-tree
-              cp -r ${workspaceDeps}/node_modules test-tree/node_modules
-              chmod -R u+w test-tree/node_modules
-              (cd test-tree && npm test --workspaces --if-present)
             '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
