@@ -3,7 +3,13 @@
  */
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
-import { splitCommandSegments, commandInvocation, leadingCommand } from "./command-utils.ts";
+import {
+	splitCommandSegments,
+	commandInvocation,
+	leadingCommand,
+	isQuoteDisguisedFlag,
+	hasDisguisedFlag,
+} from "./command-utils.ts";
 
 // ── splitCommandSegments ────────────────────────────────────────────────────
 
@@ -169,4 +175,51 @@ test("returns null for empty segment", () => {
 
 test("returns null for env assignment only", () => {
 	assert.equal(leadingCommand("FOO=bar"), null);
+});
+
+// ── isQuoteDisguisedFlag / hasDisguisedFlag ─────────────────────────────────
+//
+// A quoted flag (`"-rf"`) runs identically to an unquoted one (`-rf`) but
+// evades `arg.startsWith("-")` checks. Rather than unquote-and-continue
+// (a losing chase against every possible quoting/escaping trick), these
+// are used to deny the whole command outright.
+
+suite("isQuoteDisguisedFlag");
+
+test("detects double-quoted flag", () => {
+	assert.equal(isQuoteDisguisedFlag('"-rf"'), true);
+});
+
+test("detects single-quoted flag", () => {
+	assert.equal(isQuoteDisguisedFlag("'-r'"), true);
+});
+
+test("ignores plain unquoted flag", () => {
+	assert.equal(isQuoteDisguisedFlag("-rf"), false);
+});
+
+test("ignores quoted value that isn't a flag", () => {
+	assert.equal(isQuoteDisguisedFlag('"fix bug"'), false);
+});
+
+test("ignores mismatched quotes", () => {
+	assert.equal(isQuoteDisguisedFlag('"-rf\''), false);
+});
+
+test("ignores too-short token", () => {
+	assert.equal(isQuoteDisguisedFlag('""'), false);
+});
+
+suite("hasDisguisedFlag");
+
+test("finds disguised flag among a command's args", () => {
+	assert.equal(hasDisguisedFlag(["\"-rf\"", "some_dir"]), true);
+});
+
+test("false when flag is unquoted", () => {
+	assert.equal(hasDisguisedFlag(["-rf", "some_dir"]), false);
+});
+
+test("false for quoted non-flag args (e.g. a commit message)", () => {
+	assert.equal(hasDisguisedFlag(["-m", '"fix bug"']), false);
 });

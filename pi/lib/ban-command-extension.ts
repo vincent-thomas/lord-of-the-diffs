@@ -9,6 +9,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
 import { getCommandUses, matchesEntry, findBannedFlag, findDisallowedFlag } from "./ban-command-logic.ts";
+import { hasDisguisedFlag } from "./command-utils.ts";
 
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
 export { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./ban-command-logic.ts";
@@ -55,6 +56,17 @@ export function createCommandPolicyExtension(options: CommandPolicyOptions) {
 				};
 			}
 			for (const use of getCommandUses(command)) {
+				if (hasDisguisedFlag(use.args)) {
+					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked quoted flag.`, "warning");
+					return {
+						block: true,
+						reason:
+							`Flags must not be quoted (blocked: \`${use.segment}\`) — quoting a flag like ` +
+							`\`"-rf"\` runs identically to \`-rf\` but hides it from the command policy. ` +
+							`Rewrite the command with flags unquoted.`,
+					};
+				}
+
 				const entry = options.entries.find((candidate) => matchesEntry(use, candidate));
 				if (!entry) {
 					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${use.name}.`, "warning");

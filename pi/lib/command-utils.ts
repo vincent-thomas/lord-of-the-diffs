@@ -228,6 +228,33 @@ export function findCommandUse(
 	return null;
 }
 
+/**
+ * True if `tok` is a flag hidden inside a quote pair, e.g. `"-rf"` or
+ * `'-r'`. Shells strip matching quotes before exec, so `"-rf"` runs
+ * identically to `-rf` — quoting it has no effect except defeating
+ * flag-prefix checks like `arg.startsWith("-")`.
+ *
+ * We deliberately don't try to unquote and keep matching through this:
+ * shells offer unlimited ways to write an equivalent token (quoting,
+ * `$''`, backslash-per-character, concatenation, …), and chasing each one
+ * as it's discovered is a losing game — the project's history is a series
+ * of exactly these bypass-then-patch fixes. Instead, callers should treat
+ * a disguised flag as reason to deny the whole command outright: legitimate
+ * commands have no reason to wrap a flag in quotes.
+ */
+export function isQuoteDisguisedFlag(tok: string): boolean {
+	if (tok.length < 3) return false;
+	const first = tok[0];
+	if (first !== '"' && first !== "'") return false;
+	if (tok[tok.length - 1] !== first) return false;
+	return tok[1] === "-";
+}
+
+/** True if any arg in `args` is a flag disguised inside quotes (see {@link isQuoteDisguisedFlag}). */
+export function hasDisguisedFlag(args: string[]): boolean {
+	return args.some(isQuoteDisguisedFlag);
+}
+
 /** Matches `python`, `python2`, `python3`, `python3.12`, etc. */
 export function isPythonCommand(cmd: string): boolean {
 	return /^python(?:\d+(?:\.\d+)?)?$/.test(cmd);
