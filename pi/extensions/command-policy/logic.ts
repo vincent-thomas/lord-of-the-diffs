@@ -89,8 +89,7 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
     ["add"],
     ["restore"],
     ["rev-parse"],
-    ["merge-base"],
-    ["commit"]
+    ["merge-base"]
   ] },
 	{
 		name: "git rm",

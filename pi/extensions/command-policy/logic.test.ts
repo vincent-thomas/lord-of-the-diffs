@@ -368,11 +368,17 @@ test("allows git on a subcommand basis", () => {
 	assert.deepEqual(findEntry("git")?.subcommand, [
 		["diff"], ["log"], ["show"],
 		["ls-files"], ["add"], ["restore"],
-		["rev-parse"], ["merge-base"], ["commit"],
+		["rev-parse"], ["merge-base"],
 	]);
 	assert.deepEqual(findEntry("git status")?.subcommand, [["status"]]);
 	assert.deepEqual(findEntry("git branch")?.subcommand, [["branch"]]);
 	assert.deepEqual(findEntry("git rm")?.subcommand, [["rm"]]);
+});
+
+test("git commit is not allowed by the command policy — must use the git_commit tool", () => {
+	const use: CommandUse = { name: "git", args: ["commit", "-m", "msg"], segment: "git commit -m msg" };
+	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
+	assert.equal(entry, undefined);
 });
 
 test("git rm bans recursive flags, matching plain rm", () => {
