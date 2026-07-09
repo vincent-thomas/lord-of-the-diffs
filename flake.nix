@@ -182,9 +182,9 @@
               if [ "$audit_exit" -eq 0 ]; then
                 echo "npm audit: no high/critical vulnerabilities"
               elif [ "$audit_exit" -eq 1 ]; then
-                ADVISORY_COUNT=$(grep -o '"advisoryCount":[0-9]*' /tmp/npm-audit.json |\
-                  grep -o '[0-9]*' || echo 0)
-                echo "⚠  npm audit: $ADVISORY_COUNT high/critical advisory(ies) found"
+                HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' /tmp/npm-audit.json)
+                CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' /tmp/npm-audit.json)
+                echo "⚠  npm audit: $HIGH high, $CRITICAL critical vulnerabilities found"
                 echo ""
                 echo "  Run locally to inspect:  npm audit --audit-level=high"
               fi
