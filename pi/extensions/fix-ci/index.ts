@@ -14,7 +14,7 @@ import { currentBranch, isWorktreeDirty } from "../../lib/git-utils.ts";
 import {
   gitPush,
   getHeadSha,
-  hasUnpushedCommits,
+  needsPush,
   pollChecks,
   fetchFailureLogs,
   isFailure,
@@ -182,7 +182,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // ── 2. Check if there's something to push ──────────────────────
-      const hasSomethingToPush = await hasUnpushedCommits(cwd, signal);
+      const hasSomethingToPush = await needsPush(cwd, signal);
 
       let pushedSha: string | undefined;
 

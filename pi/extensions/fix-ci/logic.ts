@@ -152,10 +152,17 @@ export async function getHeadSha(cwd: string, signal?: AbortSignal): Promise<str
 }
 
 /**
- * Returns true if there are unpushed commits (or branch doesn't exist on remote).
- * Compares local HEAD SHA against the remote branch SHA via git ls-remote.
+ * Returns true if `cwd`'s HEAD needs pushing (or the branch doesn't exist on
+ * remote yet). Compares local HEAD SHA against the remote branch SHA via
+ * `git ls-remote`, ignoring local tracking config, and fails open (assumes a
+ * push is needed) on error since the caller uses this to decide whether to
+ * attempt a push at all.
+ *
+ * Not the same check as commit-enforcer/logic.ts's `hasUnpushedCommits`,
+ * which compares against the local `@{u}` tracking ref and fails closed —
+ * that one is a soft nag before yielding, this one gates an actual push.
  */
-export async function hasUnpushedCommits(
+export async function needsPush(
 	cwd: string,
 	signal?: AbortSignal,
 ): Promise<boolean> {
