@@ -40,9 +40,11 @@ export async function runPreChecks(
 		return { passed: true, steps: [] };
 	}
 
-	// Skip if make isn't installed.
+	// Skip if make isn't installed. `command -v` is a POSIX shell builtin, so
+	// unlike `which` it works even in minimal environments that don't ship a
+	// standalone `which` binary (e.g. this repo's own nix build sandbox).
 	try {
-		await execAsync("which make", { cwd, timeout: 5_000, signal });
+		await execAsync("command -v make", { cwd, timeout: 5_000, signal });
 	} catch {
 		return { passed: true, steps: [] };
 	}
