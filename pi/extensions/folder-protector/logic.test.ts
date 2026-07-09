@@ -126,3 +126,12 @@ test("returns null for benign commands", () => {
 test("returns null for empty command", () => {
 	assert.equal(findBannedFolderTarget("", BANNED_FOLDERS), null);
 });
+
+test("obfuscated command name yields no path — relies on command-policy's allowlist to deny it", () => {
+	// findBannedFolderTarget can't resolve a path out of a quoted command
+	// name like `"cp"`, so it has nothing folder-specific to report here.
+	// This isn't a bypass: the bash tool_call is always also checked by the
+	// command-policy allowlist, which denies any obfuscated invocation
+	// outright regardless of which folder it might have targeted.
+	assert.equal(findBannedFolderTarget('"cp" file.txt .git/somewhere', BANNED_FOLDERS), null);
+});

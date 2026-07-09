@@ -55,6 +55,18 @@ export function createCommandPolicyExtension(options: CommandPolicyOptions) {
 				};
 			}
 			for (const use of getCommandUses(command)) {
+				if (use.obfuscated) {
+					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked disguised command.`, "warning");
+					return {
+						block: true,
+						reason:
+							`Command name or flag is pointlessly quoted or backslash-escaped ` +
+							`(blocked: \`${use.segment}\`) — e.g. \`"git"\`, \`\\-rf\`, or \`g""it\` run identically ` +
+							`to \`git\` or \`-rf\` but hide from the command policy. Rewrite the command with the ` +
+							`command name and flags written plainly, with no quotes or backslashes.`,
+					};
+				}
+
 				const entry = options.entries.find((candidate) => matchesEntry(use, candidate));
 				if (!entry) {
 					if (ctx.hasUI) ctx.ui.notify(`🚫 Blocked ${use.name}.`, "warning");

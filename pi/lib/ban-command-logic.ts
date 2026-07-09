@@ -3,7 +3,7 @@
  *
  * No pi imports — importable from any extension's test or logic module.
  */
-import { splitCommandSegments, commandInvocation } from "./command-utils.ts";
+import { splitCommandSegments, commandInvocation, OBFUSCATED } from "./command-utils.ts";
 import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
 
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse };
@@ -94,7 +94,11 @@ export function getCommandUses(text: string): CommandUse[] {
 	const uses: CommandUse[] = [];
 	for (const segment of splitCommandSegments(text)) {
 		const invocation = commandInvocation(segment);
-		if (!invocation) continue;
+		if (invocation === null) continue;
+		if (invocation === OBFUSCATED) {
+			uses.push({ name: OBFUSCATED, args: [], segment: segment.trim(), obfuscated: true });
+			continue;
+		}
 		uses.push({ ...invocation, segment: segment.trim() });
 	}
 	return uses;

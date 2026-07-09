@@ -15,6 +15,8 @@ import {
 	isPythonCommand,
 	leadingCommand,
 	splitCommandSegments,
+	hasDisguisedFlag,
+	OBFUSCATED,
 } from "../../lib/command-utils.ts";
 import {
 	matchesEntry,
@@ -28,7 +30,10 @@ import {
 
 function commandNames(text: string): string[] {
 	return splitCommandSegments(text)
-		.map((segment) => commandInvocation(segment)?.name)
+		.map((segment) => {
+			const inv = commandInvocation(segment);
+			return inv && inv !== OBFUSCATED ? inv.name : undefined;
+		})
 		.filter((name): name is string => Boolean(name));
 }
 
@@ -398,6 +403,59 @@ test("git rm without recursive flags is still allowed", () => {
 	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
 	assert.equal(entry?.name, "git rm");
 	assert.equal(findBannedFlag(use, entry!), null);
+});
+
+// Quoting a banned flag (`"-rf"` runs identically to `-rf`) used to slip past
+// findBannedFlag, because it only recognizes flags via `arg.startsWith("-")`
+// — a quoted token starts with `"` instead. The command's entry would still
+// match (by name/subcommand alone) and be treated as Allowed with no flag
+// hit. hasDisguisedFlag closes this by flagging the quoted token so callers
+// deny the command outright instead of silently letting it through.
+test("rm with a quoted recursive flag is caught by hasDisguisedFlag (bypass regression)", () => {
+	const use: CommandUse = { name: "rm", args: ['"-rf"', "dir/"], segment: 'rm "-rf" dir/' };
+	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
+	assert.equal(entry?.name, "rm"); // entry still matches by name alone
+	assert.equal(findBannedFlag(use, entry!), null); // ...and the flag check alone misses it
+	assert.equal(hasDisguisedFlag(use.args), true); // but the disguise itself is caught
+});
+
+test("git rm with a quoted recursive flag is caught by hasDisguisedFlag (bypass regression)", () => {
+	const use: CommandUse = { name: "git", args: ["rm", "'-r'", "dir/"], segment: "git rm '-r' dir/" };
+	const entry = COMMAND_POLICY_ENTRIES.find((candidate) => matchesEntry(use, candidate));
+	assert.equal(entry?.name, "git rm");
+	assert.equal(findBannedFlag(use, entry!), null);
+	assert.equal(hasDisguisedFlag(use.args), true);
+});
+
+// End-to-end: getCommandUses is the actual function createCommandPolicyExtension
+// calls on every bash tool_call, so these exercise the full parser -> policy
+// pipeline rather than a hand-built CommandUse.
+suite("getCommandUses — obfuscated invocations flagged for denial");
+
+test("quoted flag produces an obfuscated use", () => {
+	const [use] = getCommandUses('rm "-rf" dir/');
+	assert.equal(use.obfuscated, true);
+});
+
+test("quoted command name produces an obfuscated use", () => {
+	const [use] = getCommandUses('"git" commit -m x');
+	assert.equal(use.obfuscated, true);
+});
+
+test("quoted git subcommand-adjacent wrapper produces an obfuscated use", () => {
+	const [use] = getCommandUses('"sudo" git push');
+	assert.equal(use.obfuscated, true);
+});
+
+test("clean commands are never marked obfuscated", () => {
+	const uses = getCommandUses("git status --short && rg foo");
+	assert.ok(uses.every((u) => !u.obfuscated));
+});
+
+test("a legitimately quoted commit message is not marked obfuscated", () => {
+	const [use] = getCommandUses('git commit -m "fix bug"');
+	assert.equal(use.obfuscated, undefined);
+	assert.equal(use.name, "git");
 });
 
 test("can explicitly ban entries with model guidance", () => {

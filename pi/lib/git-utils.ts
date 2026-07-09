@@ -7,7 +7,7 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execAsync } from "./exec-async.ts";
-import { commandInvocation, splitCommandSegments } from "./command-utils.ts";
+import { commandInvocation, splitCommandSegments, OBFUSCATED } from "./command-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Working tree checks
@@ -133,6 +133,14 @@ function gitSubcommand(args: string[]): string | null {
 /** Returns true if the segment invokes `git <sub>`, seeing through wrappers/prefixes. */
 function isGitSubcommand(segment: string, sub: string): boolean {
 	const inv = commandInvocation(segment);
+
+	// A pointlessly-quoted command name or flag (e.g. `"git"`, `"-r"`) can't
+	// be resolved cleanly, and the whole point of quoting it is to dodge
+	// string-based checks like this one. This is a backstop in case the
+	// command-policy allowlist (the primary gate for the bash tool) isn't
+	// in front of this code path — treat "can't tell" as "assume the worst"
+	// rather than silently falling through to `false`.
+	if (inv === OBFUSCATED) return true;
 
 	// Banned prefix commands (sudo, doas, …) are no longer stripped by
 	// commandInvocation, so if the resolved command is one of those, find
