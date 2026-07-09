@@ -33,7 +33,17 @@ export function execAsync(
 	}
 
 	return new Promise((resolve, reject) => {
-		const child: ChildProcess = exec(
+		let child: ChildProcess;
+
+		const onAbort = () => {
+			child.kill();
+		};
+
+		const cleanup = () => {
+			options.signal?.removeEventListener("abort", onAbort);
+		};
+
+		child = exec(
 			command,
 			{ cwd: options.cwd, timeout: options.timeout },
 			(err, stdout, stderr) => {
@@ -49,14 +59,7 @@ export function execAsync(
 			},
 		);
 
-		const onAbort = () => {
-			child.kill();
-		};
 		options.signal?.addEventListener("abort", onAbort, { once: true });
-
-		const cleanup = () => {
-			options.signal?.removeEventListener("abort", onAbort);
-		};
 	});
 }
 
