@@ -102,7 +102,7 @@ export default function (pi: ExtensionAPI) {
 - Import shared helpers from `../../lib/`:
   - `../../lib/exec-async.ts` — `execAsync`, `extractErrorOutput`
   - `../../lib/command-utils.ts` — `commandInvocation`, `splitCommandSegments`, `findCommandUse`
-  - `../../lib/git-utils.ts` — `currentBranch`, `isDefaultBranch`, `hasUpstream`, `extractScriptPaths`
+  - `../../lib/git-utils.ts` — `currentBranch`, `isDefaultBranch`, `hasUpstream`, `isWorktreeDirty`
   - `../../lib/ban-command-extension.ts` — `createCommandPolicyExtension`, `CommandPolicyEntry`, `CommandPolicyStatus`
   - `../../lib/precheck.ts` — `runPreChecks`, `detectProjects`
 - Export types, interfaces, and functions that `index.ts` uses
