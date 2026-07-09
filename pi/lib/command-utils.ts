@@ -164,7 +164,121 @@ export function splitCommandSegments(text: string): string[] {
 	// If we ended while in a here-doc, the current buffer might be the closing
 	// delimiter without a trailing newline. Discard it so it doesn't leak.
 	segments.push(current);
-	return segments;
+
+	// The loop above treats a double-quoted span as fully opaque, which is
+	// right for splitting purposes (quotes suppress word-splitting) but wrong
+	// for detection purposes: a shell still expands $(...) and `...` *inside*
+	// double quotes, so a banned command can hide there and never appear as
+	// its own segment above — e.g. `echo "$(rm -rf /)"` would otherwise only
+	// ever surface `echo`. Run a second, additive pass per segment that pulls
+	// those hidden substitutions out as extra segments, without touching how
+	// the segment above already tokenizes (so it can't turn literal text that
+	// merely follows a substitution into a bogus extra "command").
+	const withHiddenSubstitutions: string[] = [];
+	for (const segment of segments) {
+		withHiddenSubstitutions.push(segment);
+		withHiddenSubstitutions.push(...quotedSubstitutionContents(segment));
+	}
+	return withHiddenSubstitutions;
+}
+
+/**
+ * Scan `segment` for $(...) and `...` command/backtick substitutions that
+ * occur *inside* a double-quoted span, and return each one's inner content
+ * (recursively split, so nested substitutions/pipelines are found too).
+ * Single-quoted spans are skipped entirely — a shell never expands anything
+ * inside single quotes. Unquoted spans are skipped too — {@link
+ * splitCommandSegments}'s main pass already extracts those.
+ */
+function quotedSubstitutionContents(segment: string): string[] {
+	const found: string[] = [];
+	let quote: "'" | '"' | null = null;
+	let escape = false;
+
+	for (let i = 0; i < segment.length; i++) {
+		const ch = segment[i];
+
+		if (escape) {
+			escape = false;
+			continue;
+		}
+		if (ch === "\\") {
+			escape = true;
+			continue;
+		}
+		if (quote === "'") {
+			if (ch === "'") quote = null;
+			continue;
+		}
+		if (quote === '"') {
+			if (ch === '"') {
+				quote = null;
+				continue;
+			}
+			if (ch === "$" && segment[i + 1] === "(") {
+				const close = findMatchingParen(segment, i + 2);
+				const inner = segment.slice(i + 2, close);
+				found.push(...splitCommandSegments(inner));
+				i = close;
+				continue;
+			}
+			if (ch === "`") {
+				// Naive: find the next backtick. Doesn't handle a nested backtick
+				// pair (legacy syntax that itself can't nest without escaping), but
+				// that's an existing, accepted limitation of backtick handling.
+				const close = segment.indexOf("`", i + 1);
+				if (close === -1) continue;
+				const inner = segment.slice(i + 1, close);
+				found.push(...splitCommandSegments(inner));
+				i = close;
+				continue;
+			}
+			continue;
+		}
+		if (ch === "'" || ch === '"') {
+			quote = ch;
+			continue;
+		}
+	}
+
+	return found;
+}
+
+/**
+ * Given the index just after a `$(`, find the index of its matching `)`,
+ * tracking nested parens and quotes so a `)` inside a nested substitution or
+ * a quoted argument doesn't close it early. Returns `segment.length` if
+ * unterminated (unbalanced input — treat the rest of the string as the body).
+ */
+function findMatchingParen(segment: string, start: number): number {
+	let depth = 1;
+	let quote: "'" | '"' | null = null;
+	let escape = false;
+	for (let i = start; i < segment.length; i++) {
+		const ch = segment[i];
+		if (escape) {
+			escape = false;
+			continue;
+		}
+		if (ch === "\\") {
+			escape = true;
+			continue;
+		}
+		if (quote) {
+			if (ch === quote) quote = null;
+			continue;
+		}
+		if (ch === "'" || ch === '"') {
+			quote = ch;
+			continue;
+		}
+		if (ch === "(") depth++;
+		if (ch === ")") {
+			depth--;
+			if (depth === 0) return i;
+		}
+	}
+	return segment.length;
 }
 
 /**
@@ -324,7 +438,11 @@ export function commandInvocation(segment: string): { name: string; args: string
 			continue;
 		}
 		const base = (tok.split("/").pop() ?? tok).toLowerCase();
-		if (base === "") {
+		// A bare leftover quote/backslash with no real content — can surface from
+		// a degenerate substitution body (e.g. `"$(")"`, whose extracted inner
+		// text is just `"`). Not a command; skip it like an empty token rather
+		// than resolving a nonexistent "command" named `"`.
+		if (base === "" || /^['"\\]+$/.test(base)) {
 			i++;
 			continue;
 		}

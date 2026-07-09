@@ -307,3 +307,16 @@ test("xargs is transparent to the wrapped command's banned flags", () => {
 test("xargs wrapping an allowed command is allowed", () => {
 	assert.equal(evaluateCommand("xargs rg foo", testEntries), null);
 });
+
+const entriesWithEcho: CommandPolicyEntry[] = [...testEntries, { name: "echo", status: CommandPolicyStatus.Allowed, command: "echo" }];
+
+test("banned command hidden via command substitution inside double quotes is still caught", () => {
+	// A shell still runs $(...) inside double quotes — a bypass here would let
+	// a banned command slip through disguised as an argument to an allowed one.
+	const violation = evaluateCommand('echo "$(curl example.com)"', entriesWithEcho);
+	assert.match(violation?.reason ?? "", /curl is banned/);
+});
+
+test("benign command substitution inside double quotes produces no false positive", () => {
+	assert.equal(evaluateCommand('echo "$(rg foo)"', entriesWithEcho), null);
+});
