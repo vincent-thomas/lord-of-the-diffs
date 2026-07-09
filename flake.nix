@@ -238,6 +238,48 @@
           };
         };
 
+        # ── npm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
+        # ── plus the @vt-pi/* workspace links npm sets up automatically) ──────
+        workspaceDeps = pkgs.buildNpmPackage {
+          pname = "vt-pi-workspace-deps";
+          version = "0.0.0";
+
+          src = ./.;
+
+          # Hash covers all npm deps declared in the root package-lock.json.
+          # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
+          npmDepsHash = "sha256-qhS23GwYByp6heRTA7aYzu42rLOd8941IyKhZCpiavg=";
+
+          inherit nodejs;
+
+          # No build step for these workspace members — just install deps.
+          # --ignore-scripts avoids native compilation for transitive deps
+          # (e.g. photon-node), same reasoning as piBase above.
+          dontNpmBuild = true;
+          npmFlags = [ "--ignore-scripts" ];
+
+          # dontNpmBuild only skips buildNpmPackage's own "npm run build"
+          # step — it doesn't stop stdenv's generic buildPhase from noticing
+          # this repo's own root Makefile (copied in via `src = ./.`) and
+          # running `make` (which runs `nix build`, recursively — not
+          # available inside this derivation's sandbox). Override buildPhase
+          # outright so nothing auto-detects it.
+          buildPhase = ''
+            runHook preBuild
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out
+            # -L dereferences the @vt-pi/* workspace symlinks npm creates so
+            # this derivation's node_modules is fully self-contained — no
+            # dangling symlinks back into this build's own (different) tree.
+            cp -rL node_modules $out/
+            runHook postInstall
+          '';
+        };
+
         # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
         piCustomizations =
           pkgs.runCommand "pi-customizations"
@@ -248,15 +290,31 @@
               ];
             }
             ''
-              mkdir -p $out/extensions $out/lib $out/skills
+              mkdir -p $out/extensions $out/lib $out/skills $out/packages
 
-              # Copy extensions + lib so ../lib/ imports work
+              # Copy extensions + lib + packages so ../lib/ imports and
+              # @vt-pi/command-policy imports both work
               cp -r ${./pi/extensions}/. $out/extensions/
               cp -r ${./pi/lib}/. $out/lib/
+              cp -r ${./packages}/. $out/packages/
 
               # Copy skills, AGENTS.md, and bin scripts
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
+
+              # Real npm deps (@mariozechner/pi-coding-agent, …) from
+              # workspaceDeps. Its @vt-pi/command-policy entry was dereferenced
+              # from a differently-shaped tree (this repo's own packages/*
+              # layout) so it doesn't match this derivation's flattened
+              # $out/{lib,extensions,packages}; replace it with a symlink
+              # that does. (pi/ itself is a single workspace member — lib/
+              # and extensions/* reference each other with relative imports,
+              # no node_modules entry needed for it.)
+              cp -r ${workspaceDeps}/node_modules $out/node_modules
+              chmod -R u+w $out/node_modules
+              rm -rf $out/node_modules/@vt-pi
+              mkdir -p $out/node_modules/@vt-pi
+              ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
 
               # Run tests on lib
               for test in $out/lib/*.test.ts; do
@@ -264,6 +322,21 @@
                 echo "Running test: lib/$(basename $test)"
                 ${nodejs}/bin/node --test $test
               done
+
+              # Run tests on packages
+              ${lib.concatMapStrings
+                (testFile: ''
+                  echo "Running test: ${testFile}"
+                  ${nodejs}/bin/node --test $out/packages/${testFile}
+                '')
+                (
+                  map (f: lib.removePrefix (toString ./packages + "/") (toString f)) (
+                    lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
+                      lib.filesystem.listFilesRecursive ./packages
+                    )
+                  )
+                )
+              }
 
               # Run tests on extensions
               ${lib.concatMapStrings
@@ -302,8 +375,14 @@
               mkdir -p $out/share/pi
               cp -r ${piCustomizations}/extensions $out/share/pi/extensions
               cp -r ${piCustomizations}/lib $out/share/pi/lib
+              cp -r ${piCustomizations}/packages $out/share/pi/packages
               cp -r ${piCustomizations}/skills $out/share/pi/skills
               cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+
+              # Same node_modules (real deps + @vt-pi/* workspace symlinks) as
+              # piCustomizations, so extensions can resolve them at runtime too.
+              cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
+              chmod -R u+w $out/share/pi/node_modules
 
               # Build --extension / --skill flags for every bundled item.
               # Skip test files (*.test.ts) - they're for build-time validation only.
