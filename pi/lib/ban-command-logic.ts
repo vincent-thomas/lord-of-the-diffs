@@ -63,10 +63,25 @@ export function findBannedFlag(use: CommandUse, entry: CommandPolicyEntry): stri
  * Find the first flag in a command use that is not in the entry's allowed set.
  * Returns null when there is no allowedFlags restriction, or when all flags
  * are allowed.
+ *
+ * Combined short flags (e.g. `-sv`) are checked character-by-character: every
+ * character must be covered by an allowed single-char flag (e.g. `-s`), so an
+ * arbitrary flag can't be smuggled in by bundling it with an allowed one.
  */
 export function findDisallowedFlag(use: CommandUse, entry: CommandPolicyEntry): string | null {
 	if (!entry.allowedFlags) return null;
+
+	const allowedChars = new Set<string>();
+	for (const allowed of entry.allowedFlags) {
+		if (allowed.length === 2 && allowed[0] === "-" && allowed[1] !== "-") allowedChars.add(allowed[1]);
+	}
+
 	for (const flag of commandFlags(use)) {
+		const isCombinedShort = flag.length > 2 && flag[0] === "-" && flag[1] !== "-" && !flag.includes("=");
+		if (isCombinedShort) {
+			if ([...flag.slice(1)].some((ch) => !allowedChars.has(ch))) return flag;
+			continue;
+		}
 		if (!entry.allowedFlags.some((allowed) => flagMatches(flag, allowed))) return flag;
 	}
 	return null;
