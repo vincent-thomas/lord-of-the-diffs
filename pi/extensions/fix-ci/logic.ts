@@ -96,6 +96,15 @@ async function tryExec(
 	}
 }
 
+/** Fetches `branch` from origin. Callers only care about success/failure, not the output. */
+async function fetchBranch(cwd: string, branch: string, signal?: AbortSignal): Promise<void> {
+	await execAsync(`git fetch origin ${shellQuote(branch)} 2>&1`, {
+		cwd,
+		timeout: 30_000,
+		signal,
+	});
+}
+
 /** Returns the current branch name via async git (see file header re: why not execSync). */
 async function getCurrentBranchAsync(cwd: string, signal?: AbortSignal): Promise<string> {
 	const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", {
@@ -567,11 +576,7 @@ export async function mergeBaseBranchIntoCurrent(
 
 	try {
 		// Step 1: Fetch the latest base branch from origin
-		await execAsync(`git fetch origin ${shellQuote(baseBranch)} 2>&1`, {
-			cwd,
-			timeout: 30_000,
-			signal,
-		});
+		await fetchBranch(cwd, baseBranch, signal);
 
 		// Step 2: Create a worktree with the base branch checked out
 		await execAsync(`git worktree add ${worktreePath} ${shellQuote(`origin/${baseBranch}`)} 2>&1`, {
@@ -671,11 +676,7 @@ export async function needsPullBeforePush(
 		if (!branch) return false;
 
 		// Fetch the latest remote refs for this branch
-		await execAsync(`git fetch origin ${shellQuote(branch)} 2>&1`, {
-			cwd,
-			timeout: 30_000,
-			signal,
-		});
+		await fetchBranch(cwd, branch, signal);
 
 		// origin/<branch> is an ancestor of HEAD → can fast-forward push → no pull needed
 		// If NOT an ancestor, remote is ahead or histories diverged → pull needed
@@ -736,11 +737,7 @@ export async function isBaseBranchAhead(
 ): Promise<boolean> {
 	try {
 		// Fetch the latest base branch ref from origin
-		await execAsync(`git fetch origin ${shellQuote(baseBranch)} 2>&1`, {
-			cwd,
-			timeout: 30_000,
-			signal,
-		});
+		await fetchBranch(cwd, baseBranch, signal);
 
 		// Count commits on origin/<base> that aren't reachable from HEAD.
 		// If > 0, the base branch has commits ahead of the current branch.
@@ -829,11 +826,7 @@ export async function generatePrBody(
 			const defaultBranch = await getDefaultBranch(cwd, signal);
 
 			// Fetch the latest base branch ref so merge-base is accurate.
-			await execAsync(`git fetch origin ${shellQuote(defaultBranch)} 2>/dev/null`, {
-				cwd,
-				timeout: 30_000,
-				signal,
-			});
+			await fetchBranch(cwd, defaultBranch, signal);
 
 			const { stdout: mergeBase } = await execAsync(
 				`git merge-base HEAD ${shellQuote(`origin/${defaultBranch}`)} 2>/dev/null || echo HEAD~1`,
