@@ -248,15 +248,25 @@
               ];
             }
             ''
-              mkdir -p $out/extensions $out/lib $out/skills
+              mkdir -p $out/extensions $out/lib $out/skills $out/packages
 
-              # Copy extensions + lib so ../lib/ imports work
+              # Copy extensions + lib + packages so ../lib/ imports and
+              # @vt-pi/* package imports both work
               cp -r ${./pi/extensions}/. $out/extensions/
               cp -r ${./pi/lib}/. $out/lib/
+              cp -r ${./packages}/. $out/packages/
 
               # Copy skills, AGENTS.md, and bin scripts
               cp -r ${./pi/skills}/. $out/skills/
               cp ${./pi/AGENTS.md} $out/AGENTS.md
+
+              # Wire up npm workspace packages (@vt-pi/lib, @vt-pi/command-policy, …)
+              # as plain symlinks under node_modules — equivalent to what `npm
+              # install` would produce for these zero-external-dependency
+              # workspace members, without needing network access mid-build.
+              mkdir -p $out/node_modules/@vt-pi
+              ln -s ../../lib $out/node_modules/@vt-pi/lib
+              ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
 
               # Run tests on lib
               for test in $out/lib/*.test.ts; do
@@ -264,6 +274,21 @@
                 echo "Running test: lib/$(basename $test)"
                 ${nodejs}/bin/node --test $test
               done
+
+              # Run tests on packages
+              ${lib.concatMapStrings
+                (testFile: ''
+                  echo "Running test: ${testFile}"
+                  ${nodejs}/bin/node --test $out/packages/${testFile}
+                '')
+                (
+                  map (f: lib.removePrefix (toString ./packages + "/") (toString f)) (
+                    lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
+                      lib.filesystem.listFilesRecursive ./packages
+                    )
+                  )
+                )
+              }
 
               # Run tests on extensions
               ${lib.concatMapStrings
@@ -302,8 +327,15 @@
               mkdir -p $out/share/pi
               cp -r ${piCustomizations}/extensions $out/share/pi/extensions
               cp -r ${piCustomizations}/lib $out/share/pi/lib
+              cp -r ${piCustomizations}/packages $out/share/pi/packages
               cp -r ${piCustomizations}/skills $out/share/pi/skills
               cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+
+              # Same @vt-pi/* workspace symlinks as piCustomizations, so
+              # extensions can resolve them at runtime too.
+              mkdir -p $out/share/pi/node_modules/@vt-pi
+              ln -s ../../lib $out/share/pi/node_modules/@vt-pi/lib
+              ln -s ../../packages/command-policy $out/share/pi/node_modules/@vt-pi/command-policy
 
               # Build --extension / --skill flags for every bundled item.
               # Skip test files (*.test.ts) - they're for build-time validation only.

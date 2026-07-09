@@ -1,0 +1,15 @@
+{
+	"name": "@vt-pi/command-policy",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": "./index.ts",
+		"./types.ts": "./types.ts",
+		"./predicates.ts": "./predicates.ts",
+		"./matching.ts": "./matching.ts"
+	},
+	"dependencies": {
+		"@vt-pi/lib": "*"
+	}
+}

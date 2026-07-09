@@ -2,8 +2,8 @@
  * Command policy definitions for shell command allow rules.
  */
 
-import { isAwkCommand, isPerlCommand, isPythonCommand } from "../../lib/command-utils.ts";
-import { CommandPolicyStatus, type CommandPolicyEntry } from "../../lib/command-policy-types.ts";
+import { CommandPolicyStatus, type CommandPolicyEntry } from "@vt-pi/command-policy/types.ts";
+import { isAwkCommand, isPerlCommand, isPythonCommand } from "@vt-pi/command-policy/predicates.ts";
 
 export const COMMAND_POLICY_SYSTEM_PROMPT = `
 Only run shell commands that are explicitly allowed by the command policy.

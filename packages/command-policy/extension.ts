@@ -1,17 +1,13 @@
 /**
- * command policy extension helpers.
- *
- * Creates an extension that allows only configured shell command invocations via
- * the bash tool. Rules can match commands, subcommands, and banned flags.
+ * extension.ts — builds a Pi extension that allows only configured shell
+ * command invocations via the bash tool. Rules can match commands,
+ * subcommands, and banned flags.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { isToolCallEventType } from "@mariozechner/pi-coding-agent";
-import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
-import { getCommandUses, matchesEntry, findBannedFlag, findDisallowedFlag } from "./ban-command-logic.ts";
-
-export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
-export { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./ban-command-logic.ts";
+import { CommandPolicyStatus, type CommandPolicyEntry } from "./types.ts";
+import { getCommandUses, matchesEntry, findBannedFlag, findDisallowedFlag } from "./matching.ts";
 
 export interface CommandPolicyOptions {
 	entries: CommandPolicyEntry[];

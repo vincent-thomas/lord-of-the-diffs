@@ -404,3 +404,126 @@ test("false when flag is unquoted", () => {
 test("false for quoted non-flag args (e.g. a commit message)", () => {
 	assert.equal(hasDisguisedFlag(["-m", '"fix bug"']), false);
 });
+
+// ── commandInvocation — wrapper/argument extraction table ───────────────────
+
+function commandNames(text: string): string[] {
+	return splitCommandSegments(text)
+		.map((segment) => {
+			const inv = commandInvocation(segment);
+			return inv && inv !== OBFUSCATED ? inv.name : undefined;
+		})
+		.filter((name): name is string => Boolean(name));
+}
+
+suite("commandInvocation — executable resolution");
+const invocationCases = [
+	["cat file", "cat", ["file"]],
+	["sudo cat /etc/x", "sudo", ["cat", "/etc/x"]],
+	["sudo -n -- cat /etc/x", "sudo", ["-n", "--", "cat", "/etc/x"]],
+	["doas cat /etc/x", "doas", ["cat", "/etc/x"]],
+	["env python -c 'x'", "python", ["-c", "'x'"]],
+	["env -i FOO=bar python script.py", "python", ["script.py"]],
+	["FOO=bar PYTHONPATH=. tee out", "tee", ["out"]],
+	["/usr/bin/sed -i s/a/b/ f", "sed", ["-i", "s/a/b/", "f"]],
+	["\\cat x", "cat", ["x"]],
+	["command grep x file", "grep", ["x", "file"]],
+	["builtin echo hi", "echo", ["hi"]],
+	["nice -n 10 rg needle", "rg", ["needle"]],
+	["time -p git status --short", "git", ["status", "--short"]],
+] as const;
+
+for (const [segment, name, args] of invocationCases) {
+	test(`resolves: ${segment}`, () => {
+		assert.deepEqual(commandInvocation(segment), { name, args });
+	});
+}
+
+test("empty segment → null", () => assert.equal(commandInvocation("   "), null));
+test("leadingCommand returns only executable name", () => assert.equal(leadingCommand("grep cat file"), "grep"));
+
+test("arguments are not treated as commands", () => {
+	assert.equal(findCommandUse("echo 'grep'", new Set(["grep"])), null);
+});
+
+suite("splitCommandSegments — multi-command bash text");
+const splitCases = [
+	["ls && true && cat 'fdsafdsa'", ["ls", "true", "cat"]],
+	["rg foo | head", ["rg", "head"]],
+	["rg foo || fd bar", ["rg", "fd"]],
+	["pwd; ls\nrg needle", ["pwd", "ls", "rg"]],
+	["echo $(git status --short)", ["echo", "git"]],
+	["echo `git status --short`", ["echo", "git"]],
+	["(cd /tmp && ls)", ["cd", "ls"]],
+	["cat < input > output", ["cat"]],
+	["foo & bar", ["foo", "bar"]],
+	["echo 'awk && python' && true", ["echo", "true"]],
+	["echo \"grep | sed\"; pwd", ["echo", "pwd"]],
+] as const;
+
+for (const [text, expected] of splitCases) {
+	test(`extracts commands from: ${text}`, () => {
+		assert.deepEqual(commandNames(text), expected);
+	});
+}
+
+test("findCommandUse scans every runnable segment", () => {
+	const hit = findCommandUse("ls && true && cat 'fdsafdsa'", new Set(["cat"]));
+	assert.deepEqual(hit, { name: "cat", segment: "cat 'fdsafdsa'" });
+});
+
+test("findCommandUse sees pipelines and command substitutions", () => {
+	assert.equal(findCommandUse("rg foo | head", new Set(["head"]))?.name, "head");
+	assert.equal(findCommandUse("echo $(git status --short)", new Set(["git"]))?.segment, "git status --short");
+});
+
+suite("splitCommandSegments — edge cases");
+
+const heredocCases = [
+	// Here-doc body lines leak through — the parser doesn't track heredoc state.
+	["cat << EOF\nhello\nEOF", ["cat", "hello", "eof"]],
+	["cat << 'EOF'\nhello\nEOF", ["cat", "hello", "eof"]],
+	["cat <<- EOF\n\thello\nEOF", ["cat", "eof", "hello", "eof"]],
+	["cat << EOF\nhello\nEOF && ls", ["cat", "hello", "eof", "ls"]],
+] as const;
+
+for (const [text, expected] of heredocCases) {
+	test(`here-doc body leaks: ${JSON.stringify(text.slice(0, 20))}...`, () => {
+		assert.deepEqual(commandNames(text), expected);
+	});
+}
+
+const redirectEdgeCases = [
+	["cmd &> file", ["cmd"]],
+	["cmd &>> file", ["cmd"]],
+	["cmd |& grep foo", ["cmd", "grep"]],
+	["echo foo >> file", ["echo"]],
+	["cmd 2>&1", ["cmd"]],
+	["cmd 2>&1 3>&2", ["cmd"]],
+	["cmd 2>file", ["cmd"]],
+	["cmd 1>>file", ["cmd"]],
+	// Here-doc body leaks through even with an additional redirect.
+	["cat << EOF > file\nhello\nEOF", ["cat", "hello", "eof"]],
+	["cmd < input > output", ["cmd"]],
+] as const;
+
+for (const [text, expected] of redirectEdgeCases) {
+	test(`redirect stripped: ${text}`, () => {
+		assert.deepEqual(commandNames(text), expected);
+	});
+}
+
+const complexCases = [
+	// Nested command substitution: both echos and git are real commands.
+	["echo $(echo $(git status))", ["echo", "echo", "git"]],
+	// Backtick inside double quotes inside $() — echo cmd, backtick content not extracted.
+	["echo $(echo \"`pwd`\")", ["echo", "echo"]],
+	// Process substitution <(...) — inner commands are args, not extracted.
+	["diff <(echo a) <(echo b)", ["diff"]],
+] as const;
+
+for (const [text, expected] of complexCases) {
+	test(`complex extraction: ${JSON.stringify(text.slice(0, 30))}...`, () => {
+		assert.deepEqual(commandNames(text), expected);
+	});
+}

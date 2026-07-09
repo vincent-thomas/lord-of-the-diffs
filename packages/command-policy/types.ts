@@ -12,7 +12,7 @@ export interface CommandUse {
 	/**
 	 * True when the underlying invocation could not be cleanly resolved
 	 * because its command name or a flag was pointlessly quoted (e.g.
-	 * `"git"`, `"-rf"`) — see command-utils.ts's OBFUSCATED sentinel.
+	 * `"git"`, `"-rf"`) — see @vt-pi/lib's command-utils.ts OBFUSCATED sentinel.
 	 * `name`/`args` are placeholders in this case; callers must deny the
 	 * command outright rather than match it against policy entries.
 	 */

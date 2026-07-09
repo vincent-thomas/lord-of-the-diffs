@@ -21,18 +21,19 @@ Run `nix build` or `nix run` to get the final customized pi binary.
 vt-pi/
 ├── flake.nix                  # The build — all packaging logic lives here
 ├── flake.lock
+├── package.json               # Root npm workspace (pi/lib, pi/extensions/*, packages/*)
+├── packages/                  # Standalone @vt-pi/* npm packages, promoted out of pi/lib
+│   └── command-policy/        # @vt-pi/command-policy — shell command allow-list engine
 └── pi/                        # Everything that gets bundled into the package
     ├── AGENTS.md              # System prompt shipped with the binary
     ├── extensions/            # One subdirectory or .ts file per extension
-    │   ├── command-policy/    # Whitelist of allowed shell commands
+    │   ├── command-policy/    # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
     │   ├── fix-ci/            # push_and_check_ci tool; blocks git push in bash
     │   ├── git-commit/        # git_commit tool; blocks git commit in bash
     │   ├── sandbox/           # /sandbox command for read-only mode
-    │   ├── no-file-writes.ts  # Blocks >, >> shell redirections to files
-    │   └── write-guard.ts     # Blocks write on existing files > 50 lines
-    └── lib/                   # Pure logic shared across extensions
-        ├── ban-command-extension.ts
-        ├── command-policy-types.ts
+    │   ├── no-file-writes/    # Blocks >, >> shell redirections to files
+    │   └── write-guard/       # Blocks write on existing files > 50 lines
+    └── lib/                   # @vt-pi/lib — pure logic shared across extensions
         ├── command-utils.ts
         └── git-utils.ts
 ```
@@ -46,10 +47,41 @@ Pi `ExtensionAPI`. Extensions use three main APIs:
 - `pi.registerCommand(name, { handler })` — registers a slash command like `/sandbox`
 - `pi.on("tool_call" | "before_agent_start" | "agent_end", handler)` — lifecycle hooks
 
-The `pi/lib/` directory holds shared code. **No Pi imports allowed in lib/**
-— it must stay pure TypeScript so it can be imported from any extension's
-logic module. Extensions should keep Pi imports in `index.ts` and put
-testable logic in their own `logic.ts`.
+The `pi/lib/` directory (npm package `@vt-pi/lib`) holds shared code. **No Pi
+imports allowed in lib/** — it must stay pure TypeScript so it can be
+imported from any extension's logic module. Extensions should keep Pi
+imports in `index.ts` and put testable logic in their own `logic.ts`.
+
+## npm workspaces and packages/
+
+The repo is an npm workspace (root `package.json`'s `workspaces` field covers
+`pi/lib`, every `pi/extensions/*`, and every `packages/*`). Workspace members
+are plain TypeScript with no build step — Node's native type-stripping runs
+`.ts` files directly, both in `nix build` and via `node --test`.
+
+`pi/lib/` is for logic shared across *this repo's* extensions. Promote code
+out of `pi/lib/` into its own `packages/<name>/` package when it's a
+self-contained feature with its own public API that's substantial enough to
+reason about independently — e.g. `@vt-pi/command-policy` bundles the shell
+command allow-list types, matching engine, and the Pi extension factory
+behind one entry point (`createCommandPolicyExtension`), rather than leaving
+that logic as loose files in `pi/lib/` alongside unrelated helpers like
+`git-utils.ts`.
+
+A package's `package.json` needs an `exports` map entry for every subpath
+another workspace member imports (e.g. `@vt-pi/lib/command-utils.ts`). Keep
+Pi-touching code (anything importing `@mariozechner/pi-coding-agent`) in its
+own file behind the package's main `index.ts` export — pure-logic test files
+elsewhere in the repo should import a pure subpath (e.g.
+`@vt-pi/command-policy/matching.ts`) instead of the barrel, so testing that
+logic doesn't require `@mariozechner/pi-coding-agent` to be resolvable.
+
+`flake.nix`'s `piCustomizations` and `pi` derivations wire up each
+`@vt-pi/*` workspace package as a symlink under `node_modules/@vt-pi/` —
+equivalent to what `npm install` would produce for these
+zero-external-dependency workspace members, without needing network access
+mid-build. Adding a new package requires a matching `ln -s` line in both
+derivations.
 
 ## Test files
 

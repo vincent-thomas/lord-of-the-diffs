@@ -1,0 +1,11 @@
+{
+	"name": "vt-pi",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"workspaces": [
+		"pi/lib",
+		"pi/extensions/*",
+		"packages/*"
+	]
+}

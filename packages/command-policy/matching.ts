@@ -1,10 +1,10 @@
 /**
- * ban-command-logic.ts — pure matching logic for command policy enforcement.
+ * matching.ts — pure matching logic for command policy enforcement.
  *
- * No pi imports — importable from any extension's test or logic module.
+ * No pi imports — importable from any test or logic module.
  */
-import { splitCommandSegments, commandInvocation, OBFUSCATED } from "./command-utils.ts";
-import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./command-policy-types.ts";
+import { splitCommandSegments, commandInvocation, OBFUSCATED } from "@vt-pi/lib/command-utils.ts";
+import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./types.ts";
 
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse };
 
