@@ -27,7 +27,7 @@ export async function branchExistsOnRemote(
 ): Promise<boolean> {
 	try {
 		const { stdout } = await execAsync(
-			`git ls-remote --heads origin ${branch}`,
+			`git ls-remote --heads origin ${shellQuote(branch)}`,
 			{ cwd, timeout: 10_000, signal },
 		);
 		// ls-remote returns empty if branch doesn't exist
