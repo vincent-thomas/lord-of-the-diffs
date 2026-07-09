@@ -6,5 +6,8 @@
 	"workspaces": [
 		"pi",
 		"packages/*"
-	]
+	],
+	"scripts": {
+		"test": "npm test --workspaces --if-present"
+	}
 }

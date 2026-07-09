@@ -6,6 +6,9 @@
 	"exports": {
 		".": "./index.ts"
 	},
+	"scripts": {
+		"test": "node --test"
+	},
 	"dependencies": {
 		"@mariozechner/pi-coding-agent": "^0.73.1"
 	}

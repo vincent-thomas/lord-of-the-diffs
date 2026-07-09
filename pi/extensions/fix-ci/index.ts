@@ -40,6 +40,12 @@ import {
 
 const MAX_CYCLES = 3;
 
+/** Shapes a tool result: single text block plus the machine-readable `details`
+ * every branch below returns alongside it. */
+function respond(text: string, details: Record<string, unknown>) {
+  return { content: [{ type: "text" as const, text }], details };
+}
+
 export default function (pi: ExtensionAPI) {
   let cycleCount = 0;
 
@@ -65,21 +71,15 @@ export default function (pi: ExtensionAPI) {
       notify("Checking for uncommitted changes…");
 
       if (await isWorktreeDirty(cwd, signal)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `## ⚠️ Working Tree Has Uncommitted Changes\n\n` +
-                `The working tree is dirty — there are unstaged, uncommitted changes.\n\n` +
-                `Commit them first before pushing. A push should represent a clear, ` +
-                `verifiable checkpoint.\n\n` +
-                `Run \`git status\` to see what's pending, then stage and commit. ` +
-                `After committing, call \`push_and_check_ci\` again.`,
-            },
-          ],
-          details: { dirtyWorkingTree: true },
-        };
+        return respond(
+          `## ⚠️ Working Tree Has Uncommitted Changes\n\n` +
+            `The working tree is dirty — there are unstaged, uncommitted changes.\n\n` +
+            `Commit them first before pushing. A push should represent a clear, ` +
+            `verifiable checkpoint.\n\n` +
+            `Run \`git status\` to see what's pending, then stage and commit. ` +
+            `After committing, call \`push_and_check_ci\` again.`,
+          { dirtyWorkingTree: true },
+        );
       }
 
       // ── 1. Check if base branch is ahead — merge if so ─────────────
@@ -92,20 +92,11 @@ export default function (pi: ExtensionAPI) {
         const baseAhead = await isBaseBranchAhead(cwd, prBase, signal);
         if (baseAhead) {
           if (!branchName) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text:
-                    `Could not determine the current branch name. ` +
-                    `Fix manually and try again.`,
-                },
-              ],
-              details: {
-                mergeFailed: true,
-                error: "Unable to determine current branch",
-              },
-            };
+            return respond(
+              `Could not determine the current branch name. ` +
+                `Fix manually and try again.`,
+              { mergeFailed: true, error: "Unable to determine current branch" },
+            );
           }
 
           notify(`Merging ${prBase} into ${branchName} via worktree…`);
@@ -121,57 +112,45 @@ export default function (pi: ExtensionAPI) {
             if (mergeResult.conflictPaths.length > 0) {
               const conflictList = formatConflictList(mergeResult.conflictPaths);
 
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text:
-                      `## ⚠️ Merge Conflicts Detected\n\n` +
-                      `The PR branch \`${branchName}\` has conflicts with the base branch ` +
-                      `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
-                      `\`${branchName}\` but there are unresolved conflicts.\n\n` +
-                      `### Conflicting files:\n${conflictList}\n\n` +
-                      `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
-                      `### To resolve:\n` +
-                      `1. Resolve the conflicts in the listed files\n` +
-                      `2. \`git add\` the resolved files\n` +
-                      `3. Commit the merge (the merge message is pre-filled)\n` +
-                      `4. Run \`push_and_check_ci\` again`,
-                  },
-                ],
-                details: {
+              return respond(
+                `## ⚠️ Merge Conflicts Detected\n\n` +
+                  `The PR branch \`${branchName}\` has conflicts with the base branch ` +
+                  `\`${prBase}\`. I attempted to merge the latest \`${prBase}\` into ` +
+                  `\`${branchName}\` but there are unresolved conflicts.\n\n` +
+                  `### Conflicting files:\n${conflictList}\n\n` +
+                  `### Merge output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+                  `### To resolve:\n` +
+                  `1. Resolve the conflicts in the listed files\n` +
+                  `2. \`git add\` the resolved files\n` +
+                  `3. Commit the merge (the merge message is pre-filled)\n` +
+                  `4. Run \`push_and_check_ci\` again`,
+                {
                   mergeConflict: true,
                   baseBranch: prBase,
                   currentBranch: branchName,
                   conflictPaths: mergeResult.conflictPaths,
                   mergeOutput: mergeResult.output,
                 },
-              };
+              );
             }
 
             // Merge failed but no conflicts — likely a tooling or network error.
-            return {
-              content: [
-                {
-                  type: "text",
-                  text:
-                    `## ⚠️ Merge Failed\n\n` +
-                    `Failed to merge \`${prBase}\` into \`${branchName}\`. ` +
-                    `No merge conflicts were detected — this is likely a ` +
-                    `transient tooling issue (e.g. network or auth).\n\n` +
-                    `### Error output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
-                    `Try running \`push_and_check_ci\` again. ` +
-                    `If the problem persists, merge \`${prBase}\` into your branch manually ` +
-                    `(\`git fetch origin ${prBase} && git merge origin/${prBase}\`).`,
-                },
-              ],
-              details: {
+            return respond(
+              `## ⚠️ Merge Failed\n\n` +
+                `Failed to merge \`${prBase}\` into \`${branchName}\`. ` +
+                `No merge conflicts were detected — this is likely a ` +
+                `transient tooling issue (e.g. network or auth).\n\n` +
+                `### Error output:\n\`\`\`\n${mergeResult.output.trim()}\n\`\`\`\n\n` +
+                `Try running \`push_and_check_ci\` again. ` +
+                `If the problem persists, merge \`${prBase}\` into your branch manually ` +
+                `(\`git fetch origin ${prBase} && git merge origin/${prBase}\`).`,
+              {
                 mergeFailed: true,
                 baseBranch: prBase,
                 currentBranch: branchName,
                 errorOutput: mergeResult.output,
               },
-            };
+            );
           }
 
           notify(
@@ -205,52 +184,37 @@ export default function (pi: ExtensionAPI) {
             if (pullResult.conflictPaths.length > 0) {
               const conflictList = formatConflictList(pullResult.conflictPaths);
 
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text:
-                      `## ⚠️ Merge Conflicts During Pull\n\n` +
-                      `The remote branch has commits ahead of local. ` +
-                      `I attempted to pull them via merge but there are unresolved ` +
-                      `conflicts.\n\n` +
-                      `### Conflicting files:\n${conflictList}\n\n` +
-                      `### Pull output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
-                      `### To resolve:\n` +
-                      `1. Resolve the conflicts in the listed files\n` +
-                      `2. \`git add\` the resolved files\n` +
-                      `3. Commit the merge\n` +
-                      `4. Run \`push_and_check_ci\` again`,
-                  },
-                ],
-                details: {
+              return respond(
+                `## ⚠️ Merge Conflicts During Pull\n\n` +
+                  `The remote branch has commits ahead of local. ` +
+                  `I attempted to pull them via merge but there are unresolved ` +
+                  `conflicts.\n\n` +
+                  `### Conflicting files:\n${conflictList}\n\n` +
+                  `### Pull output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
+                  `### To resolve:\n` +
+                  `1. Resolve the conflicts in the listed files\n` +
+                  `2. \`git add\` the resolved files\n` +
+                  `3. Commit the merge\n` +
+                  `4. Run \`push_and_check_ci\` again`,
+                {
                   mergeConflict: true,
                   conflictPaths: pullResult.conflictPaths,
                   pullOutput: pullResult.output,
                 },
-              };
+              );
             }
 
             // Pull failed but no conflicts — likely a tooling or network error.
-            return {
-              content: [
-                {
-                  type: "text",
-                  text:
-                    `## ⚠️ Pull Failed\n\n` +
-                    `Failed to pull remote changes. ` +
-                    `No merge conflicts were detected — this is likely a ` +
-                    `transient tooling issue (e.g. network or auth).\n\n` +
-                    `### Error output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
-                    `Try running \`push_and_check_ci\` again. ` +
-                    `If the problem persists, pull manually.`,
-                },
-              ],
-              details: {
-                pullFailed: true,
-                errorOutput: pullResult.output,
-              },
-            };
+            return respond(
+              `## ⚠️ Pull Failed\n\n` +
+                `Failed to pull remote changes. ` +
+                `No merge conflicts were detected — this is likely a ` +
+                `transient tooling issue (e.g. network or auth).\n\n` +
+                `### Error output:\n\`\`\`\n${pullResult.output.trim()}\n\`\`\`\n\n` +
+                `Try running \`push_and_check_ci\` again. ` +
+                `If the problem persists, pull manually.`,
+              { pullFailed: true, errorOutput: pullResult.output },
+            );
           }
 
           notify("Pull succeeded. Proceeding with push…");
@@ -263,17 +227,11 @@ export default function (pi: ExtensionAPI) {
 
         if (!pushResult.success) {
           cycleCount = 0;
-          return {
-            content: [
-              {
-                type: "text",
-                text:
-                  `git push failed:\n\n\`\`\`\n${pushResult.output}\n\`\`\`\n\n` +
-                  `Fix the push error and try again.`,
-              },
-            ],
-            details: { pushFailed: true, output: pushResult.output },
-          };
+          return respond(
+            `git push failed:\n\n\`\`\`\n${pushResult.output}\n\`\`\`\n\n` +
+              `Fix the push error and try again.`,
+            { pushFailed: true, output: pushResult.output },
+          );
         }
 
         // Pin all subsequent checks to the exact commit we just pushed.
@@ -293,17 +251,11 @@ export default function (pi: ExtensionAPI) {
           const prResult = await createDraftPr(cwd, prTitle, prBody, signal);
 
           if (!prResult.success) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text:
-                    `Draft PR creation failed. The push succeeded but the PR ` +
-                    `could not be created.\n\n\`\`\`\n${prResult.output}\n\`\`\``,
-                },
-              ],
-              details: { prCreationFailed: true, output: prResult.output },
-            };
+            return respond(
+              `Draft PR creation failed. The push succeeded but the PR ` +
+                `could not be created.\n\n\`\`\`\n${prResult.output}\n\`\`\``,
+              { prCreationFailed: true, output: prResult.output },
+            );
           }
 
           const prUrl = prResult.url ? prResult.url : "(see gh output)";
@@ -322,29 +274,15 @@ export default function (pi: ExtensionAPI) {
       const prState = await getPrState(cwd, signal);
       if (prState === "MERGED") {
         cycleCount = 0;
-        return {
-          content: [
-            {
-              type: "text",
-              text: `✅ Pull request was already merged. Nothing more to do.`,
-            },
-          ],
-          details: { prMerged: true },
-        };
+        return respond(`✅ Pull request was already merged. Nothing more to do.`, { prMerged: true });
       }
       if (prState === "CLOSED") {
         cycleCount = 0;
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `Pull request is closed (not merged). No CI checks to poll. ` +
-                `If you need to re-open it, do so manually and then call push_and_check_ci again.`,
-            },
-          ],
-          details: { prClosed: true },
-        };
+        return respond(
+          `Pull request is closed (not merged). No CI checks to poll. ` +
+            `If you need to re-open it, do so manually and then call push_and_check_ci again.`,
+          { prClosed: true },
+        );
       }
 
       // ── 4. Poll checks ───────────────────────────────────────────────
@@ -354,24 +292,14 @@ export default function (pi: ExtensionAPI) {
 
       if (pollResult.timedOut) {
         cycleCount = 0;
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `Timed out after ${pollResult.polls} polls. ` +
-                `waiting for checks on ${pollResult.mode}. ` +
-                `Some checks are still running. Last status:\n\n` +
-                formatChecks(pollResult.checks) +
-                `\n\nStop here — tell the user CI timed out.`,
-            },
-          ],
-          details: {
-            checks: pollResult.checks,
-            mode: pollResult.mode,
-            timedOut: true,
-          },
-        };
+        return respond(
+          `Timed out after ${pollResult.polls} polls. ` +
+            `waiting for checks on ${pollResult.mode}. ` +
+            `Some checks are still running. Last status:\n\n` +
+            formatChecks(pollResult.checks) +
+            `\n\nStop here — tell the user CI timed out.`,
+          { checks: pollResult.checks, mode: pollResult.mode, timedOut: true },
+        );
       }
 
       // ── 5. Categorise ────────────────────────────────────────────────
@@ -380,23 +308,13 @@ export default function (pi: ExtensionAPI) {
       // ⚠️ No checks at all — don't claim CI is green.
       if (pollResult.checks.length === 0) {
         cycleCount = 0;
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `No CI checks are configured for ${pollResult.mode}. ` +
-                `The push succeeded, but nothing ran — there is no CI signal ` +
-                `to confirm the change is good. Tell the user no checks ran ` +
-                `rather than claiming CI passed.`,
-            },
-          ],
-          details: {
-            checks: [],
-            mode: pollResult.mode,
-            noChecks: true,
-          },
-        };
+        return respond(
+          `No CI checks are configured for ${pollResult.mode}. ` +
+            `The push succeeded, but nothing ran — there is no CI signal ` +
+            `to confirm the change is good. Tell the user no checks ran ` +
+            `rather than claiming CI passed.`,
+          { checks: [], mode: pollResult.mode, noChecks: true },
+        );
       }
 
       // ✅ All passed
@@ -449,20 +367,12 @@ export default function (pi: ExtensionAPI) {
           const reviewResult = await waitForReview(cwd, signal, notify);
 
           if (reviewResult.decision === "changes_requested") {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: formatChangesRequested(reviewResult),
-                },
-              ],
-              details: {
-                checks: pollResult.checks,
-                mode: pollResult.mode,
-                allPassed: true,
-                review: reviewResult,
-              },
-            };
+            return respond(formatChangesRequested(reviewResult), {
+              checks: pollResult.checks,
+              mode: pollResult.mode,
+              allPassed: true,
+              review: reviewResult,
+            });
           }
 
           if (reviewResult.decision === "approved") {
@@ -486,19 +396,11 @@ export default function (pi: ExtensionAPI) {
           );
         }
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: successLines.join("\n"),
-            },
-          ],
-          details: {
-            checks: pollResult.checks,
-            mode: pollResult.mode,
-            allPassed: true,
-          },
-        };
+        return respond(successLines.join("\n"), {
+          checks: pollResult.checks,
+          mode: pollResult.mode,
+          allPassed: true,
+        });
       }
 
       // ── 6. Fetch failure logs ────────────────────────────────────────
@@ -515,47 +417,25 @@ export default function (pi: ExtensionAPI) {
       // ── 7. Cycle limit ───────────────────────────────────────────────
       if (cycle >= MAX_CYCLES) {
         cycleCount = 0;
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                report +
-                `\n\nThis was attempt ${cycle}/${MAX_CYCLES}. Stop here — ` +
-                `tell the user you were unable to fix CI after ${MAX_CYCLES} attempts ` +
-                `and show them the remaining failures.`,
-            },
-          ],
-          details: {
-            checks: pollResult.checks,
-            mode: pollResult.mode,
-            failureLogs,
-            exhausted: true,
-          },
-        };
+        return respond(
+          report +
+            `\n\nThis was attempt ${cycle}/${MAX_CYCLES}. Stop here — ` +
+            `tell the user you were unable to fix CI after ${MAX_CYCLES} attempts ` +
+            `and show them the remaining failures.`,
+          { checks: pollResult.checks, mode: pollResult.mode, failureLogs, exhausted: true },
+        );
       }
 
       // ── 8. Return failures for the AI to fix ─────────────────────────
-      return {
-        content: [
-          {
-            type: "text",
-            text:
-              report +
-              `\n\nThis is attempt ${cycle}/${MAX_CYCLES}. ` +
-              `Fix these failures with minimal code changes. ` +
-              `Do not modify workflow files unless the failure is clearly a workflow bug. ` +
-              `Run relevant checks locally if possible to verify before committing. ` +
-              `After committing your fix, call push_and_check_ci again.`,
-          },
-        ],
-        details: {
-          checks: pollResult.checks,
-          mode: pollResult.mode,
-          failureLogs,
-          cycle,
-        },
-      };
+      return respond(
+        report +
+          `\n\nThis is attempt ${cycle}/${MAX_CYCLES}. ` +
+          `Fix these failures with minimal code changes. ` +
+          `Do not modify workflow files unless the failure is clearly a workflow bug. ` +
+          `Run relevant checks locally if possible to verify before committing. ` +
+          `After committing your fix, call push_and_check_ci again.`,
+        { checks: pollResult.checks, mode: pollResult.mode, failureLogs, cycle },
+      );
     },
   });
 }
