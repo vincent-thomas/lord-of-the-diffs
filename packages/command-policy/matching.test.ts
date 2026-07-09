@@ -218,6 +218,11 @@ test("combined short flag passes when every char is individually allowed", () =>
 	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["-s", "-b"] }), null);
 });
 
+test("combined short flag cannot smuggle a disallowed char behind =value (-sv=val vs -s)", () => {
+	const use: CommandUse = { name: "git", args: ["status", "-sv=val"], segment: "git status -sv=val" };
+	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["--short", "--porcelain", "-s"] }), "-sv=val");
+});
+
 suite("evaluateCommand — end-to-end policy decision");
 const testEntries: CommandPolicyEntry[] = [
 	{ name: "rg", status: CommandPolicyStatus.Allowed, command: "rg" },
