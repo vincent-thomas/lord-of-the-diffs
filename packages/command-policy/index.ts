@@ -1,12 +1,14 @@
 /**
- * @vt-pi/command-policy — types and matching logic for an allow-list of
- * shell command invocations.
+ * @vt-pi/command-policy — a Pi extension factory that allows only configured
+ * shell command invocations via the bash tool.
  *
- * Pure TypeScript, no dependency on Pi (@mariozechner/pi-coding-agent) or
- * any other agent framework — consumers wire these matching functions into
- * their own tool_call hook. See pi/extensions/command-policy for an example.
+ * The default export builds the extension from a list of policy entries:
+ *
+ *   import createCommandPolicyExtension from "@vt-pi/command-policy";
+ *   export default createCommandPolicyExtension({ entries: [...] });
  */
 
+export { createCommandPolicyExtension as default, type CommandPolicyOptions } from "./extension.ts";
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./types.ts";
 export { isPythonCommand, isPerlCommand, isAwkCommand } from "./predicates.ts";
 export { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./matching.ts";

@@ -1,9 +1,10 @@
 /**
  * matching.ts — pure matching logic for command policy enforcement.
  *
- * No pi imports — importable from any test or logic module.
+ * No dependency on anything else in the vt-pi workspace — importable from
+ * any test or logic module on its own.
  */
-import { splitCommandSegments, commandInvocation, OBFUSCATED } from "@vt-pi/lib/command-utils.ts";
+import { splitCommandSegments, commandInvocation, OBFUSCATED } from "./command-utils.ts";
 import { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse } from "./types.ts";
 
 export { CommandPolicyStatus, type CommandPolicyEntry, type CommandUse };

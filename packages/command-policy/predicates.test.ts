@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findCommandUse } from "@vt-pi/lib/command-utils.ts";
+import { findCommandUse } from "./command-utils.ts";
 import { isAwkCommand, isPerlCommand, isPythonCommand } from "./predicates.ts";
 
 test("arguments are not treated as commands", () => {

@@ -6,12 +6,17 @@
  * matching.test.ts / predicates.test.ts. This file only exercises
  * COMMAND_POLICY_ENTRIES itself.
  *
+ * Imports from the package's "./matching.ts" subpath rather than its main
+ * entry point — the main entry also pulls in the Pi extension wiring, which
+ * needs @mariozechner/pi-coding-agent to be resolvable and isn't available
+ * in the test environment.
+ *
  * Run with:   node --test logic.test.ts
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
 import { hasDisguisedFlag } from "@vt-pi/lib/command-utils.ts";
-import { CommandPolicyStatus, type CommandUse, matchesEntry, findBannedFlag } from "@vt-pi/command-policy";
+import { CommandPolicyStatus, type CommandUse, matchesEntry, findBannedFlag } from "@vt-pi/command-policy/matching.ts";
 import { COMMAND_POLICY_ENTRIES } from "./logic.ts";
 
 suite("COMMAND_POLICY_ENTRIES");
