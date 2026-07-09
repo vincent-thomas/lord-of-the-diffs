@@ -24,23 +24,6 @@
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
 
-        # ── Recursively find *.test.ts under srcDir and run each one from
-        # ── $out/<outSubdir>/<relative-path> ─────────────────────────────
-        runTestsRecursive =
-          srcDir: outSubdir:
-          lib.concatMapStrings
-            (testFile: ''
-              echo "Running test: ${testFile}"
-              ${nodejs}/bin/node --test $out/${outSubdir}/${testFile}
-            '')
-            (
-              map (f: lib.removePrefix (toString srcDir + "/") (toString f)) (
-                lib.filter (f: lib.hasSuffix ".test.ts" (baseNameOf (toString f))) (
-                  lib.filesystem.listFilesRecursive srcDir
-                )
-              )
-            );
-
         # ── Token generator for GitHub App auth ──────────────────────────────
         # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
         # Prints just the raw token to stdout.
@@ -213,7 +196,7 @@
             runHook postBuild
           '';
 
-          doCheck = false; # Tests run in piCustomizations derivation
+          doCheck = false; # Tests run in workspaceDeps derivation
 
           installPhase = ''
             runHook preInstall
@@ -269,6 +252,10 @@
 
           inherit nodejs;
 
+          # git is needed on PATH for the checkPhase below — several tests
+          # (git-commit, fix-ci) shell out to a real `git` binary.
+          nativeBuildInputs = [ pkgs.git ];
+
           # No build step for these workspace members — just install deps.
           # --ignore-scripts avoids native compilation for transitive deps
           # (e.g. photon-node), same reasoning as piBase above.
@@ -284,6 +271,16 @@
           buildPhase = ''
             runHook preBuild
             runHook postBuild
+          '';
+
+          # Run the workspace test suite here, where the repo's real
+          # layout (root package.json + pi/ + packages/*) and freshly
+          # installed node_modules already match up — no copying needed.
+          doCheck = true;
+          checkPhase = ''
+            runHook preCheck
+            npm test --workspaces --if-present
+            runHook postCheck
           '';
 
           installPhase = ''
@@ -332,19 +329,6 @@
               rm -rf $out/node_modules/@vt-pi
               mkdir -p $out/node_modules/@vt-pi
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
-
-              # Run tests on lib
-              for test in $out/lib/*.test.ts; do
-                [ -f "$test" ] || continue
-                echo "Running test: lib/$(basename $test)"
-                ${nodejs}/bin/node --test $test
-              done
-
-              # Run tests on packages
-              ${runTestsRecursive ./packages "packages"}
-
-              # Run tests on extensions
-              ${runTestsRecursive ./pi/extensions "extensions"}
             '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
