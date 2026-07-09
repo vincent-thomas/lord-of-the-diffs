@@ -45,6 +45,12 @@ export interface PushResult {
 	output: string;
 }
 
+export interface MergeResult {
+	success: boolean;
+	output: string;
+	conflictPaths: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Git push
 // ---------------------------------------------------------------------------
@@ -542,7 +548,7 @@ export async function mergeBaseBranchIntoCurrent(
 	baseBranch: string,
 	currentBranch: string,
 	signal?: AbortSignal,
-): Promise<{ success: boolean; output: string; conflictPaths: string[] }> {
+): Promise<MergeResult> {
 	const safeBranch = currentBranch.replace(/[^a-zA-Z0-9_-]/g, "-");
 	const worktreePath = `/tmp/vt-pi-merge-${safeBranch}-${Date.now()}`;
 
@@ -697,7 +703,7 @@ export async function needsPullBeforePush(
 export async function pullRemoteChanges(
 	cwd: string,
 	signal?: AbortSignal,
-): Promise<{ success: boolean; output: string; conflictPaths: string[] }> {
+): Promise<MergeResult> {
 	try {
 		const { stdout, stderr } = await execAsync(
 			"git pull --no-rebase --no-edit 2>&1",
