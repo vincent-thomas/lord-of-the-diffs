@@ -5,11 +5,11 @@ description: "Add, modify, or remove shell command policy entries in pi/extensio
 
 # command-policy
 
-The command policy lives in `pi/extensions/command-policy/logic.ts` as an array of `CommandPolicyEntry` objects in the `COMMAND_POLICY_ENTRIES` constant. The policy is enforced by `pi/extensions/command-policy/index.ts` which uses `createCommandPolicyExtension()` from `../../lib/ban-command-extension.ts`.
+The command policy lives in `pi/extensions/command-policy/logic.ts` as an array of `CommandPolicyEntry` objects in the `COMMAND_POLICY_ENTRIES` constant. The policy is enforced by `pi/extensions/command-policy/index.ts` which uses `createCommandPolicyExtension()` from `@vt-pi/command-policy` (the `packages/command-policy` workspace package).
 
 ## Entry types
 
-There are three entry forms, defined by `../../lib/command-policy-types.ts`:
+There are three entry forms, defined by `packages/command-policy/types.ts`:
 
 ### 1. Banned — full command ban
 
@@ -56,22 +56,22 @@ There are three entry forms, defined by `../../lib/command-policy-types.ts`:
   name: "git status",
   status: CommandPolicyStatus.Allowed,
   command: "git",
-  subcommand: ["status"],
+  subcommand: [["status"]],
   allowedFlags: ["--short", "--porcelain", "-s"],
 }
 ```
 
 - The command is allowed only when using one of the `allowedFlags`
 - Mutually exclusive with `bannedFlags`
-- `subcommand` is an array — each element must match the corresponding positional argument after the command name (case-insensitive)
+- `subcommand` is an array of string-arrays with OR semantics: each inner array is a full sequence of positional args to match (case-insensitive), and the entry matches if ANY inner array matches — e.g. `[["status"]]` matches `git status`, and `[["remote", "add"], ["remote", "remove"]]` matches either `git remote add` or `git remote remove`
 
 ### Subcommand filtering
 
 Use `subcommand` to restrict policy to specific git (or other) subcommands:
 
 ```typescript
-{ name: "git add",     status: CommandPolicyStatus.Allowed, command: "git", subcommand: ["add"] }
-{ name: "git diff",    status: CommandPolicyStatus.Allowed, command: "git", subcommand: ["diff"] }
+{ name: "git add",     status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["add"]] }
+{ name: "git diff",    status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["diff"]] }
 ```
 
 If `subcommand` is not set, the policy matches any invocation of that command (e.g., `"ls"` matches all `ls` calls).
