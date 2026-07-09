@@ -204,7 +204,6 @@ export default function (pi: ExtensionAPI) {
 
       if (hasSomethingToPush) {
         cycleCount++;
-        const cycle = cycleCount;
 
         // ── Pull remote changes if local and remote have diverged ────────
         onUpdate?.({
