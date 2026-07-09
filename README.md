@@ -109,23 +109,26 @@ vt-pi/
 ├── flake.nix                  # Nix build — packages everything
 ├── flake.lock
 ├── Makefile                   # Defines what "valid" means
+├── packages/                  # Standalone @vt-pi/* npm packages
+│   └── command-policy/        # Shell command allow-list engine
 └── pi/
     ├── AGENTS.md              # System prompt (bundled into binary)
     ├── extensions/
-    │   ├── command-policy/    # Shell command allowlist
+    │   ├── command-policy/    # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
+    │   ├── commit-enforcer/   # Nags the agent to commit/push before yielding
     │   ├── fix-ci/            # push_and_check_ci tool
+    │   ├── folder-protector/  # Blocks write/edit on protected folders (e.g. .git/)
     │   ├── git-commit/        # git_commit tool
-    │   ├── no-file-writes.ts  # Blocks >/>> in bash
+    │   ├── no-file-writes/    # Blocks >/>> in bash
     │   ├── sandbox/           # /sandbox read-only mode
-    │   └── write-guard.ts     # Blocks write on large/guarded files
+    │   └── write-guard/       # Blocks write on large/guarded files
     ├── lib/                   # Pure logic, no Pi SDK imports
-    │   ├── ban-command-extension.ts
-    │   ├── ban-command-logic.ts
-    │   ├── command-policy-types.ts
     │   ├── command-utils.ts
     │   ├── exec-async.ts
+    │   ├── folder-guard.ts
     │   ├── git-utils.ts
-    │   └── precheck.ts
+    │   ├── precheck.ts
+    │   └── shell-quote.ts
     └── skills/                # Skill definitions (populated at build time)
 ```
 
@@ -138,9 +141,9 @@ vt-pi/
 
 ## Adding a skill
 
-1. Create `.pi/skills/<name>/SKILL.md` with frontmatter (`name`, `description`)
+1. Create `pi/skills/<name>/SKILL.md` with frontmatter (`name`, `description`)
    and markdown body
-2. Add it with `git add .pi/skills/<name>/` (the flake discovers tracked skills)
+2. Add it with `git add pi/skills/<name>/` (the flake discovers tracked skills)
 3. The agent sees it in the `<available_skills>` block of the system prompt
 
 ## Building
