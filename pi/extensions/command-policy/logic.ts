@@ -89,10 +89,16 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
     ["add"],
     ["restore"],
     ["rev-parse"],
-    ["merge-base"],
-    ["commit"],
-    ["rm"]
+    ["merge-base"]
   ] },
+	{
+		name: "git rm",
+		status: CommandPolicyStatus.Allowed,
+		command: "git",
+		subcommand: [["rm"]],
+		bannedFlags: ["-r", "-R", "-rf", "-fr", "--recursive"],
+		description: "Recursive git rm is not allowed. Remove files individually instead.",
+	},
 	{
 		name: "git checkout",
 		status: CommandPolicyStatus.Allowed,
