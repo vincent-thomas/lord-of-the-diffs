@@ -6,7 +6,16 @@
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
 import { CommandPolicyStatus, type CommandUse } from "./types.ts";
-import { matchesEntry, flagMatches, commandFlags, findBannedFlag, findDisallowedFlag, getCommandUses } from "./matching.ts";
+import {
+	matchesEntry,
+	flagMatches,
+	commandFlags,
+	findBannedFlag,
+	findDisallowedFlag,
+	getCommandUses,
+	evaluateCommand,
+} from "./matching.ts";
+import type { CommandPolicyEntry } from "./types.ts";
 
 suite("getCommandUses — command uses extraction");
 test("extracts command uses with segment", () => {
@@ -207,4 +216,69 @@ test("combined short flag cannot smuggle a disallowed char past an allowed one (
 test("combined short flag passes when every char is individually allowed", () => {
 	const use: CommandUse = { name: "git", args: ["status", "-sb"], segment: "git status -sb" };
 	assert.equal(findDisallowedFlag(use, { name: "git status", status: CommandPolicyStatus.Allowed, command: "git", subcommand: [["status"]], allowedFlags: ["-s", "-b"] }), null);
+});
+
+suite("evaluateCommand — end-to-end policy decision");
+const testEntries: CommandPolicyEntry[] = [
+	{ name: "rg", status: CommandPolicyStatus.Allowed, command: "rg" },
+	{ name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-rf"] },
+	{
+		name: "git status",
+		status: CommandPolicyStatus.Allowed,
+		command: "git",
+		subcommand: [["status"]],
+		allowedFlags: ["--short"],
+	},
+	{
+		name: "git push",
+		status: CommandPolicyStatus.Allowed,
+		command: "git",
+		subcommand: [["push"]],
+		validate: (use) => (use.args.includes("--force") ? "force pushes are not allowed" : null),
+	},
+	{ name: "curl", status: CommandPolicyStatus.Banned, command: "curl" },
+];
+
+test("fully allowed command returns null", () => {
+	assert.equal(evaluateCommand("rg foo", testEntries), null);
+});
+
+test("here-doc is blocked before any command is inspected", () => {
+	const violation = evaluateCommand("cat <<EOF\nhi\nEOF", testEntries);
+	assert.match(violation?.reason ?? "", /Here-docs/);
+});
+
+test("obfuscated command is blocked", () => {
+	const violation = evaluateCommand('"rg" foo', testEntries);
+	assert.match(violation?.reason ?? "", /pointlessly quoted or backslash-escaped/);
+});
+
+test("command not on the allow list is blocked", () => {
+	const violation = evaluateCommand("wget foo", testEntries);
+	assert.match(violation?.reason ?? "", /not on the allow list/);
+});
+
+test("banned entry is blocked", () => {
+	const violation = evaluateCommand("curl example.com", testEntries);
+	assert.match(violation?.reason ?? "", /curl is banned/);
+});
+
+test("banned flag is blocked", () => {
+	const violation = evaluateCommand("rm -rf dir", testEntries);
+	assert.match(violation?.reason ?? "", /Flag `-rf` is not allowed/);
+});
+
+test("disallowed flag is blocked", () => {
+	const violation = evaluateCommand("git status -v", testEntries);
+	assert.match(violation?.reason ?? "", /not in the allowed flags/);
+});
+
+test("entry-specific validation failure is blocked", () => {
+	const violation = evaluateCommand("git push --force", testEntries);
+	assert.match(violation?.reason ?? "", /force pushes are not allowed/);
+});
+
+test("second command use in a chain is checked too", () => {
+	const violation = evaluateCommand("rg foo && wget bar", testEntries);
+	assert.match(violation?.reason ?? "", /not on the allow list/);
 });
