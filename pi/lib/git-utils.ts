@@ -3,7 +3,6 @@
  *
  * No pi imports — importable from any extension's logic module.
  */
-import { execSync } from "node:child_process";
 import { execAsync } from "./exec-async.ts";
 
 // ---------------------------------------------------------------------------
@@ -37,16 +36,14 @@ export async function isWorktreeDirty(
 // ---------------------------------------------------------------------------
 
 /** Returns the current branch name, or null if not in a git repo. */
-export function currentBranch(cwd: string): string | null {
+export async function currentBranch(cwd: string, signal?: AbortSignal): Promise<string | null> {
 	try {
-		return (
-			execSync("git branch --show-current", {
-				cwd,
-				stdio: ["pipe", "pipe", "pipe"],
-			})
-				.toString()
-				.trim() || null
-		);
+		const { stdout } = await execAsync("git branch --show-current", {
+			cwd,
+			timeout: 5_000,
+			signal,
+		});
+		return stdout.trim() || null;
 	} catch {
 		return null;
 	}

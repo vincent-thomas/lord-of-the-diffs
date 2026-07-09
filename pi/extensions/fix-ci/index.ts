@@ -85,7 +85,7 @@ export default function (pi: ExtensionAPI) {
       // ── 1. Check if base branch is ahead — merge if so ─────────────
       // Keep the PR branch up to date with the base branch before pushing
       // and running CI. This prevents CI from testing a stale branch.
-      const branchName = currentBranch(cwd);
+      const branchName = await currentBranch(cwd, signal);
       const prBase = await getPrBaseBranch(cwd, signal);
 
       if (prBase) {
