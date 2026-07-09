@@ -9,6 +9,7 @@
  */
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
 import { hasUpstream, currentBranch } from "../../lib/git-utils.ts";
+import { shellQuote } from "../../lib/shell-quote.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,7 +131,7 @@ export async function hasUnpushedCommits(
 			{ cwd, timeout: 5_000, signal },
 		);
 		const { stdout: remoteSha } = await execAsync(
-			`git ls-remote origin ${branch.trim()}`,
+			`git ls-remote origin ${shellQuote(branch.trim())}`,
 			{ cwd, timeout: 10_000, signal },
 		);
 
@@ -313,7 +314,7 @@ async function ghApi(
 	signal?: AbortSignal,
 ): Promise<string> {
 	try {
-		const { stdout } = await execAsync(`gh api --paginate "${endpoint}" --jq '${jq}'`, {
+		const { stdout } = await execAsync(`gh api --paginate ${shellQuote(endpoint)} --jq '${jq}'`, {
 			cwd,
 			timeout: 20_000,
 			signal,
@@ -520,7 +521,7 @@ export async function getBranchShaViaApi(
 	signal?: AbortSignal,
 ): Promise<string | null> {
 	return tryExec(
-		`gh api "repos/{owner}/{repo}/git/ref/heads/${branch}" --jq '.object.sha' 2>/dev/null`,
+		`gh api ${shellQuote(`repos/{owner}/{repo}/git/ref/heads/${branch}`)} --jq '.object.sha' 2>/dev/null`,
 		cwd,
 		15_000,
 		signal,
@@ -561,14 +562,14 @@ export async function mergeBaseBranchIntoCurrent(
 
 	try {
 		// Step 1: Fetch the latest base branch from origin
-		await execAsync(`git fetch origin ${baseBranch} 2>&1`, {
+		await execAsync(`git fetch origin ${shellQuote(baseBranch)} 2>&1`, {
 			cwd,
 			timeout: 30_000,
 			signal,
 		});
 
 		// Step 2: Create a worktree with the base branch checked out
-		await execAsync(`git worktree add ${worktreePath} origin/${baseBranch} 2>&1`, {
+		await execAsync(`git worktree add ${worktreePath} ${shellQuote(`origin/${baseBranch}`)} 2>&1`, {
 			cwd,
 			timeout: 30_000,
 			signal,
@@ -585,12 +586,12 @@ export async function mergeBaseBranchIntoCurrent(
 			if (actualSha.trim() !== expectedSha) {
 				// Force-update the local branch ref to match GitHub
 				await execAsync(
-					`git fetch origin ${baseBranch}:${baseBranch} --force 2>&1`,
+					`git fetch origin ${shellQuote(`${baseBranch}:${baseBranch}`)} --force 2>&1`,
 					{ cwd, timeout: 30_000, signal },
 				);
 				await removeWorktree();
 				await execAsync(
-					`git worktree add ${worktreePath} ${baseBranch} 2>&1`,
+					`git worktree add ${worktreePath} ${shellQuote(baseBranch)} 2>&1`,
 					{ cwd, timeout: 30_000, signal },
 				);
 			}
@@ -706,7 +707,7 @@ export async function detectPrConflictsLocally(
 
 	// Fetch the latest base branch from origin
 	try {
-		await execAsync(`git fetch origin ${baseBranch} 2>&1`, {
+		await execAsync(`git fetch origin ${shellQuote(baseBranch)} 2>&1`, {
 			cwd,
 			timeout: 30_000,
 			signal,
@@ -726,8 +727,9 @@ export async function detectPrConflictsLocally(
 
 	// Use git merge-tree to detect conflicts (purely read-only, no worktree needed)
 	try {
-		const mergeBaseCmd = `git merge-base HEAD origin/${baseBranch}`;
-		const mergeTreeCmd = `git merge-tree $(git merge-base HEAD origin/${baseBranch}) HEAD origin/${baseBranch}`;
+		const quotedBaseRef = shellQuote(`origin/${baseBranch}`);
+		const mergeBaseCmd = `git merge-base HEAD ${quotedBaseRef}`;
+		const mergeTreeCmd = `git merge-tree $(git merge-base HEAD ${quotedBaseRef}) HEAD ${quotedBaseRef}`;
 
 		const mergeBaseResult = await execAsync(mergeBaseCmd, {
 			cwd,
@@ -785,7 +787,7 @@ export async function needsPullBeforePush(
 		if (!branch) return false;
 
 		// Fetch the latest remote refs for this branch
-		await execAsync(`git fetch origin ${branch} 2>&1`, {
+		await execAsync(`git fetch origin ${shellQuote(branch)} 2>&1`, {
 			cwd,
 			timeout: 30_000,
 			signal,
@@ -795,7 +797,7 @@ export async function needsPullBeforePush(
 		// If NOT an ancestor, remote is ahead or histories diverged → pull needed
 		try {
 			await execAsync(
-				`git merge-base --is-ancestor origin/${branch} HEAD 2>/dev/null`,
+				`git merge-base --is-ancestor ${shellQuote(`origin/${branch}`)} HEAD 2>/dev/null`,
 				{ cwd, timeout: 10_000, signal },
 			);
 			// exit 0 = is ancestor = remote is behind or equal → no pull needed
@@ -850,7 +852,7 @@ export async function isBaseBranchAhead(
 ): Promise<boolean> {
 	try {
 		// Fetch the latest base branch ref from origin
-		await execAsync(`git fetch origin ${baseBranch} 2>&1`, {
+		await execAsync(`git fetch origin ${shellQuote(baseBranch)} 2>&1`, {
 			cwd,
 			timeout: 30_000,
 			signal,
@@ -859,7 +861,7 @@ export async function isBaseBranchAhead(
 		// Count commits on origin/<base> that aren't reachable from HEAD.
 		// If > 0, the base branch has commits ahead of the current branch.
 		const { stdout } = await execAsync(
-			`git rev-list --count HEAD..origin/${baseBranch} 2>/dev/null`,
+			`git rev-list --count ${shellQuote(`HEAD..origin/${baseBranch}`)} 2>/dev/null`,
 			{ cwd, timeout: 10_000, signal },
 		);
 		const count = parseInt(stdout.trim(), 10);
@@ -957,14 +959,14 @@ export async function generatePrBody(
 			}
 
 			// Fetch the latest base branch ref so merge-base is accurate.
-			await execAsync(`git fetch origin ${defaultBranch} 2>/dev/null`, {
+			await execAsync(`git fetch origin ${shellQuote(defaultBranch)} 2>/dev/null`, {
 				cwd,
 				timeout: 30_000,
 				signal,
 			});
 
 			const { stdout: mergeBase } = await execAsync(
-				`git merge-base HEAD origin/${defaultBranch} 2>/dev/null || echo HEAD~1`,
+				`git merge-base HEAD ${shellQuote(`origin/${defaultBranch}`)} 2>/dev/null || echo HEAD~1`,
 				{ cwd, timeout: 10_000, signal },
 			);
 			base = mergeBase.trim();
@@ -1026,7 +1028,7 @@ export async function createDraftPr(
 		}
 
 		const { stdout, stderr } = await execAsync(
-			`gh pr create --draft --title '${title.replace(/'/g, "'\\''")}' --body '${body.replace(/'/g, "'\\''")}' --head '${head}' --base '${base}'`,
+			`gh pr create --draft --title ${shellQuote(title)} --body ${shellQuote(body)} --head ${shellQuote(head)} --base ${shellQuote(base)}`,
 			{ cwd, timeout: 30_000, signal },
 		);
 		return { success: true, url: stdout.trim() || null, output: stdout + stderr };
@@ -1061,7 +1063,7 @@ export async function addReviewers(
 	signal?: AbortSignal,
 ): Promise<boolean> {
 	try {
-		await execAsync(`gh pr edit --add-reviewer "${reviewers}"`, {
+		await execAsync(`gh pr edit --add-reviewer ${shellQuote(reviewers)}`, {
 			cwd,
 			timeout: 15_000,
 			signal,
