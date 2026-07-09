@@ -483,6 +483,17 @@ test("findCommandUse sees pipelines and command substitutions", () => {
 	assert.equal(findCommandUse("echo $(git status --short)", new Set(["git"]))?.segment, "git status --short");
 });
 
+test("findCommandUse sees command substitutions hidden inside double quotes", () => {
+	// A shell still expands $(...) inside double quotes — a policy that only
+	// looked at unquoted text would miss a banned command smuggled this way.
+	assert.equal(findCommandUse('echo "$(rm -rf /)"', new Set(["rm"]))?.segment, "rm -rf /");
+	assert.equal(findCommandUse('echo "hello $(rm -rf /) world"', new Set(["rm"]))?.segment, "rm -rf /");
+});
+
+test("findCommandUse does not see $(...) inside single quotes (no substitution there)", () => {
+	assert.equal(findCommandUse("echo '$(rm -rf /)'", new Set(["rm"])), null);
+});
+
 suite("splitCommandSegments — edge cases");
 
 const heredocCases = [
@@ -522,10 +533,22 @@ for (const [text, expected] of redirectEdgeCases) {
 const complexCases = [
 	// Nested command substitution: both echos and git are real commands.
 	["echo $(echo $(git status))", ["echo", "echo", "git"]],
-	// Backtick inside double quotes inside $() — echo cmd, backtick content not extracted.
-	["echo $(echo \"`pwd`\")", ["echo", "echo"]],
+	// Backtick inside double quotes inside $() — backtick content is extracted too.
+	["echo $(echo \"`pwd`\")", ["echo", "echo", "pwd"]],
 	// Process substitution <(...) — inner commands are args, not extracted.
 	["diff <(echo a) <(echo b)", ["diff"]],
+	// Command substitution inside double quotes: still expanded by the shell,
+	// so it must still be extracted as its own segment.
+	['echo "$(git status --short)"', ["echo", "git"]],
+	['echo "before $(whoami) after"', ["echo", "whoami"]],
+	// Two substitutions in the same quoted string — both must be caught.
+	['echo "a $(echo b) c $(echo d) e"', ["echo", "echo", "echo"]],
+	// Backtick command substitution directly inside double quotes.
+	["echo \"`whoami`\"", ["echo", "whoami"]],
+	// Nested quotes inside a double-quoted substitution still resolve correctly.
+	["echo \"$(cat 'my file')\"", ["echo", "cat"]],
+	// Single quotes suppress substitution entirely — $(...) is literal text.
+	["echo '$(rm -rf /)'", ["echo"]],
 ] as const;
 
 for (const [text, expected] of complexCases) {
