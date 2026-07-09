@@ -22,14 +22,14 @@ There are three entry forms, defined by `packages/command-policy/types.ts`:
 }
 ```
 
-- `command` can be a string (exact lowercase basename match) or a predicate function
+- `command` can be a string (exact lowercase basename match) or a predicate `(use: CommandUse) => boolean` — `use.name` is the resolved command name, not a bare string, so match against `use.name` (not `use` itself)
 - When a predicate is needed, match the command by name:
 
 ```typescript
 {
   name: "Python",
   status: CommandPolicyStatus.Banned,
-  command: (cmd: string): boolean => /^python(?:\d+(?:\.\d+)?)?$/.test(cmd),
+  command: (use): boolean => /^python(?:\d+(?:\.\d+)?)?$/.test(use.name),
   description: "Use safer shell tools or Pi tools instead.",
 }
 ```
