@@ -305,6 +305,9 @@ suite("extractScriptPaths", () => {
 
 	test("compound: multiple scripts", () =>
 		assert.deepEqual(extractScriptPaths("bash a.sh && bash b.sh"), ["a.sh", "b.sh"]));
+
+	test("multi-line: scripts on separate lines with no operator between them", () =>
+		assert.deepEqual(extractScriptPaths("bash a.sh\nbash b.sh"), ["a.sh", "b.sh"]));
 });
 
 

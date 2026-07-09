@@ -235,7 +235,7 @@ export async function hasUpstream(cwd: string, signal?: AbortSignal): Promise<bo
  */
 export function extractScriptPaths(command: string): string[] {
 	const paths: string[] = [];
-	const segments = command.split(/[;&|]+/);
+	const segments = splitCommandSegments(command);
 
 	for (const seg of segments) {
 		const s = seg.trim();
