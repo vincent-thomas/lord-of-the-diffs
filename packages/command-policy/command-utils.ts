@@ -390,11 +390,23 @@ function isAliasBustingBackslash(tok: string): boolean {
  * can be "pointlessly" escaped.
  */
 export function isPointlessEscaping(tok: string): boolean {
-	if (!/['"\\]/.test(tok)) return false;
 	if (isAliasBustingBackslash(tok)) return false;
+	return resolvePointlessEscaping(tok) !== null;
+}
+
+/**
+ * Resolves `tok` through quote/backslash-escaping (see
+ * {@link resolveEscaping}) and returns the result only if the escaping was
+ * pointless — i.e. the resolved value needs no further escaping. Returns
+ * null if `tok` has no quote/backslash chars, the escaping is unbalanced,
+ * or the resolved value still needs escaping.
+ */
+function resolvePointlessEscaping(tok: string): string | null {
+	if (!/['"\\]/.test(tok)) return null;
 	const resolved = resolveEscaping(tok);
-	if (resolved === null || resolved.length === 0) return false;
-	return !NEEDS_ESCAPING.test(resolved);
+	if (resolved === null || resolved.length === 0) return null;
+	if (NEEDS_ESCAPING.test(resolved)) return null;
+	return resolved;
 }
 
 /**
@@ -406,11 +418,7 @@ export function isPointlessEscaping(tok: string): boolean {
  * flag, leading or otherwise.
  */
 export function isDisguisedFlag(tok: string): boolean {
-	if (!/['"\\]/.test(tok)) return false;
-	const resolved = resolveEscaping(tok);
-	if (resolved === null || resolved.length === 0) return false;
-	if (NEEDS_ESCAPING.test(resolved)) return false;
-	return resolved.startsWith("-");
+	return resolvePointlessEscaping(tok)?.startsWith("-") ?? false;
 }
 
 /** True if any arg in `args` is a flag disguised via quoting/escaping (see {@link isDisguisedFlag}). */
