@@ -15,6 +15,8 @@ const ENV_ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*=.*$/;
 
 // Wrappers that delegate to a following command. We skip past these (and any
 // option flags they carry) to reach the actual command being executed.
+// xargs counts too: `find . | xargs rm -rf` should be checked as `rm -rf`,
+// not waved through under an unconditionally-allowed "xargs".
 const WRAPPERS = new Set([
 	"env",
 	"command",
@@ -26,12 +28,18 @@ const WRAPPERS = new Set([
 	"stdbuf",
 	"setsid",
 	"ionice",
+	"xargs",
 ]);
 
 const WRAPPER_FLAGS_WITH_VALUE: Record<string, ReadonlySet<string>> = {
 	nice: new Set(["-n", "--adjustment"]),
 	ionice: new Set(["-c", "--class", "-n", "--classdata", "--pid"]),
 	stdbuf: new Set(["-i", "-o", "-e"]),
+	xargs: new Set([
+		"-I", "-L", "-n", "-P", "-s", "-a", "-d", "-E",
+		"--replace", "--max-lines", "--max-args", "--max-procs", "--max-chars",
+		"--arg-file", "--delimiter", "--eof-string",
+	]),
 };
 
 /**

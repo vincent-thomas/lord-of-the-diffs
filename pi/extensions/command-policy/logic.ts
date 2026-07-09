@@ -47,7 +47,6 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	{ name: "wc", status: CommandPolicyStatus.Allowed, command: "wc" },
 	{ name: "sort", status: CommandPolicyStatus.Allowed, command: "sort" },
 	{ name: "uniq", status: CommandPolicyStatus.Allowed, command: "uniq" },
-	{ name: "xargs", status: CommandPolicyStatus.Allowed, command: "xargs" },
 	{ name: "rg", status: CommandPolicyStatus.Allowed, command: "rg" },
 	{ name: "fd", status: CommandPolicyStatus.Allowed, command: "fd" },
 	{ name: "jq", status: CommandPolicyStatus.Allowed, command: "jq" },

@@ -431,6 +431,11 @@ const invocationCases = [
 	["builtin echo hi", "echo", ["hi"]],
 	["nice -n 10 rg needle", "rg", ["needle"]],
 	["time -p git status --short", "git", ["status", "--short"]],
+	["xargs rm -rf", "rm", ["-rf"]],
+	["xargs -0 rm -rf", "rm", ["-rf"]],
+	["xargs -I{} rm -rf {}", "rm", ["-rf", "{}"]],
+	["xargs -I {} rm -rf {}", "rm", ["-rf", "{}"]],
+	["xargs -n 1 -P 4 sudo rm", "sudo", ["rm"]],
 ] as const;
 
 for (const [segment, name, args] of invocationCases) {
@@ -459,6 +464,7 @@ const splitCases = [
 	["foo & bar", ["foo", "bar"]],
 	["echo 'awk && python' && true", ["echo", "true"]],
 	["echo \"grep | sed\"; pwd", ["echo", "pwd"]],
+	["find . -name '*.log' | xargs rm -rf", ["find", "rm"]],
 ] as const;
 
 for (const [text, expected] of splitCases) {
