@@ -71,17 +71,11 @@ export function splitCommandSegments(text: string): string[] {
 
 		if (skipRedirectionTarget) {
 			if (/\s/.test(ch)) continue;
-			// Handle FD duplication: >&n, <&n, <&-, and &> combined redirect
-			if (ch === "&") {
-				i++; // advance past &
-				// Consume FD number (digits or - for <&-) or filename after &
-				while (i < text.length && !/[\s;|&()`<>{}]/.test(text[i])) i++;
-				i--;
-			} else {
-				// Regular file/directory path after > or <
-				while (i < text.length && !/[\s;|&()`<>{}]/.test(text[i])) i++;
-				i--;
-			}
+			// Consume the redirection target: an FD number/filename after `>`/`<`, or
+			// (after an FD-duplication `&`, e.g. `>&n`, `<&n`, `<&-`) the FD/filename following it.
+			if (ch === "&") i++;
+			while (i < text.length && !/[\s;|&()`<>{}]/.test(text[i])) i++;
+			i--;
 			skipRedirectionTarget = false;
 			continue;
 		}
