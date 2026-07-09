@@ -129,16 +129,10 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// 5. Commit.
-			if (preCheck.steps.length > 0 || params.add_all) {
-				completedSteps.push("Committing…");
-				onUpdate?.({
-					content: [{ type: "text", text: completedSteps.join("\n") }],
-				});
-			} else {
-				onUpdate?.({
-					content: [{ type: "text", text: "Committing…" }],
-				});
-			}
+			completedSteps.push("Committing…");
+			onUpdate?.({
+				content: [{ type: "text", text: completedSteps.join("\n") }],
+			});
 
 			const result = await gitCommit(cwd, params.message, signal);
 
