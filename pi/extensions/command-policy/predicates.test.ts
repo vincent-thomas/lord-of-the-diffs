@@ -1,11 +1,12 @@
 /**
- * predicates.test.ts — tests for the language interpreter command predicates.
+ * predicates.test.ts — tests for this extension's language interpreter
+ * command predicates (used to build COMMAND_POLICY_ENTRIES).
  *
  * Run with:   node --test predicates.test.ts
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findCommandUse } from "./command-utils.ts";
+import { findCommandUse } from "@vt-pi/lib/command-utils.ts";
 import { isAwkCommand, isPerlCommand, isPythonCommand } from "./predicates.ts";
 
 test("arguments are not treated as commands", () => {

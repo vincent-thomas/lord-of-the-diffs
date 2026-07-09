@@ -1,6 +1,8 @@
 /**
- * predicates.ts — command-name predicates for the language interpreters
- * covered by the default command policy entries.
+ * predicates.ts — command-name predicates for the language interpreters this
+ * extension's COMMAND_POLICY_ENTRIES bans. This is a policy choice specific
+ * to vt-pi, not part of @vt-pi/command-policy's matching engine, so it lives
+ * here rather than in the package.
  */
 
 /** Matches `python`, `python2`, `python3`, `python3.12`, etc. */

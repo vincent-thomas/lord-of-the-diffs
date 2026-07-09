@@ -68,13 +68,25 @@ behind one entry point (`createCommandPolicyExtension`), rather than leaving
 that logic as loose files in `pi/lib/` alongside unrelated helpers like
 `git-utils.ts`.
 
+**A package's public API should be as small as the actual consumer needs —
+export what's used, not everything a module happens to define.** Before
+adding something to a package's exports, check whether any file outside the
+package actually imports it; if not, keep it private. Policy choices that
+happen to live near the engine (e.g. *which* command-name predicates like
+`isPythonCommand` to ban) aren't part of the engine itself — those belong
+in the consuming extension (`pi/extensions/command-policy`), where the
+actual entries get constructed, not in the package.
+
 A package's `package.json` needs an `exports` map entry for every subpath
 another workspace member imports (e.g. `@vt-pi/lib/command-utils.ts`). Keep
 Pi-touching code (anything importing `@mariozechner/pi-coding-agent`) in its
-own file behind the package's main `index.ts` export — pure-logic test files
-elsewhere in the repo should import a pure subpath (e.g.
-`@vt-pi/command-policy/matching.ts`) instead of the barrel, so testing that
-logic doesn't require `@mariozechner/pi-coding-agent` to be resolvable.
+own file behind the package's main `index.ts` export — pure-logic consumers
+elsewhere in the repo should import a second, deliberate entry point instead
+(e.g. `@vt-pi/command-policy/pure.ts`, which re-exports only the types and
+matching primitives actually used outside the package), so depending on it
+doesn't require `@mariozechner/pi-coding-agent` to be resolvable. Files not
+named in `exports` (`types.ts`, `matching.ts`, `command-utils.ts`,
+`extension.ts`) are private implementation and may be freely restructured.
 
 **A `packages/*` package must not depend on any other `@vt-pi/*` workspace
 package** (only on external deps like `@mariozechner/pi-coding-agent`, which

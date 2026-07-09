@@ -2,21 +2,20 @@
  * logic.test.ts — integration tests for this repo's command policy entries.
  *
  * Generic command-parsing and matching-logic tests live upstream, in
- * @vt-pi/lib's command-utils.test.ts and @vt-pi/command-policy's
- * matching.test.ts / predicates.test.ts. This file only exercises
- * COMMAND_POLICY_ENTRIES itself.
+ * @vt-pi/lib's command-utils.test.ts and @vt-pi/command-policy's own
+ * matching.test.ts. This file only exercises COMMAND_POLICY_ENTRIES itself.
  *
- * Imports from the package's "./matching.ts" subpath rather than its main
- * entry point — the main entry also pulls in the Pi extension wiring, which
- * needs @mariozechner/pi-coding-agent to be resolvable and isn't available
- * in the test environment.
+ * Imports from the package's "./pure.ts" subpath rather than its main entry
+ * point — the main entry also pulls in the Pi extension wiring, which needs
+ * @mariozechner/pi-coding-agent to be resolvable and isn't available in the
+ * test environment.
  *
  * Run with:   node --test logic.test.ts
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
 import { hasDisguisedFlag } from "@vt-pi/lib/command-utils.ts";
-import { CommandPolicyStatus, type CommandUse, matchesEntry, findBannedFlag } from "@vt-pi/command-policy/matching.ts";
+import { CommandPolicyStatus, type CommandUse, matchesEntry, findBannedFlag } from "@vt-pi/command-policy/pure.ts";
 import { COMMAND_POLICY_ENTRIES } from "./logic.ts";
 
 suite("COMMAND_POLICY_ENTRIES");
