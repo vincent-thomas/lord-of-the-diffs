@@ -305,11 +305,11 @@ export default function (pi: ExtensionAPI) {
         cycleCount = 0;
         return respond(
           `Timed out after ${pollResult.polls} polls. ` +
-            `waiting for checks on ${pollResult.mode}. ` +
+            `waiting for checks on ${pollResult.label}. ` +
             `Some checks are still running. Last status:\n\n` +
             formatChecks(pollResult.checks) +
             `\n\nStop here — tell the user CI timed out.`,
-          { checks: pollResult.checks, mode: pollResult.mode, timedOut: true },
+          { checks: pollResult.checks, label: pollResult.label, timedOut: true },
         );
       }
 
@@ -320,11 +320,11 @@ export default function (pi: ExtensionAPI) {
       if (pollResult.checks.length === 0) {
         cycleCount = 0;
         return respond(
-          `No CI checks are configured for ${pollResult.mode}. ` +
+          `No CI checks are configured for ${pollResult.label}. ` +
             `The push succeeded, but nothing ran — there is no CI signal ` +
             `to confirm the change is good. Tell the user no checks ran ` +
             `rather than claiming CI passed.`,
-          { checks: [], mode: pollResult.mode, noChecks: true },
+          { checks: [], label: pollResult.label, noChecks: true },
         );
       }
 
@@ -333,7 +333,7 @@ export default function (pi: ExtensionAPI) {
         cycleCount = 0;
 
         const successLines = [
-          `All ${pollResult.checks.length} checks passed for ${pollResult.mode}. ✅`,
+          `All ${pollResult.checks.length} checks passed for ${pollResult.label}. ✅`,
           "",
           formatChecks(pollResult.checks),
         ];
@@ -380,7 +380,7 @@ export default function (pi: ExtensionAPI) {
           if (reviewResult.decision === "changes_requested") {
             return respond(formatChangesRequested(reviewResult), {
               checks: pollResult.checks,
-              mode: pollResult.mode,
+              label: pollResult.label,
               allPassed: true,
               review: reviewResult,
             });
@@ -409,7 +409,7 @@ export default function (pi: ExtensionAPI) {
 
         return respond(successLines.join("\n"), {
           checks: pollResult.checks,
-          mode: pollResult.mode,
+          label: pollResult.label,
           allPassed: true,
         });
       }
@@ -419,7 +419,7 @@ export default function (pi: ExtensionAPI) {
 
       const failureLogs = await fetchFailureLogs(failures, cwd, signal);
       const report = buildReport(
-        pollResult.mode,
+        pollResult.label,
         pollResult.checks,
         failures,
         failureLogs,
@@ -433,7 +433,7 @@ export default function (pi: ExtensionAPI) {
             `\n\nThis was attempt ${cycle}/${MAX_CYCLES}. Stop here — ` +
             `tell the user you were unable to fix CI after ${MAX_CYCLES} attempts ` +
             `and show them the remaining failures.`,
-          { checks: pollResult.checks, mode: pollResult.mode, failureLogs, exhausted: true },
+          { checks: pollResult.checks, label: pollResult.label, failureLogs, exhausted: true },
         );
       }
 
@@ -445,7 +445,7 @@ export default function (pi: ExtensionAPI) {
           `Do not modify workflow files unless the failure is clearly a workflow bug. ` +
           `Run relevant checks locally if possible to verify before committing. ` +
           `After committing your fix, call push_and_check_ci again.`,
-        { checks: pollResult.checks, mode: pollResult.mode, failureLogs, cycle },
+        { checks: pollResult.checks, label: pollResult.label, failureLogs, cycle },
       );
     },
   });
@@ -471,7 +471,7 @@ function formatChecks(checks: CheckResult[]): string {
 }
 
 function buildReport(
-  mode: string,
+  label: string,
   allChecks: CheckResult[],
   failures: CheckResult[],
   failureLogs: FailureLog[],
@@ -479,7 +479,7 @@ function buildReport(
   const passed = allChecks.filter((c) => !isFailure(c.bucket));
   const lines: string[] = [];
 
-  lines.push(`## CI Results for ${mode}`);
+  lines.push(`## CI Results for ${label}`);
   lines.push("");
   lines.push(`**${failures.length} failed**, ${passed.length} passed`);
   lines.push("");

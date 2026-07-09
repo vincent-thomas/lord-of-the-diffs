@@ -30,7 +30,7 @@ export interface PollResult {
 
 export interface PollTarget {
 	sha: string;
-	mode: string;
+	label: string;
 }
 
 export interface FailureLog {
@@ -247,12 +247,12 @@ export async function resolvePollTarget(
 ): Promise<PollTarget> {
 	const sha = pushedSha || (await getHeadSha(cwd, signal)) || "";
 	const pr = await detectPrNumber(cwd, signal);
-	const mode = pr
+	const label = pr
 		? `PR #${pr} (${sha.slice(0, 8)})`
 		: sha
 			? `commit ${sha.slice(0, 8)}`
 			: "unknown";
-	return { sha, mode };
+	return { sha, label };
 }
 
 export async function pollChecks(
@@ -260,13 +260,13 @@ export async function pollChecks(
 	signal?: AbortSignal,
 	onStatus?: (msg: string) => void,
 	pushedSha?: string,
-): Promise<PollResult & { mode: string }> {
-	const { sha, mode } = await resolvePollTarget(cwd, signal, pushedSha);
+): Promise<PollResult & { label: string }> {
+	const { sha, label } = await resolvePollTarget(cwd, signal, pushedSha);
 
-	onStatus?.(`Checking CI for ${mode}…`);
+	onStatus?.(`Checking CI for ${label}…`);
 
 	if (!sha) {
-		return { checks: [], timedOut: false, polls: 0, mode };
+		return { checks: [], timedOut: false, polls: 0, label };
 	}
 
 	let polls = 0;
@@ -280,7 +280,7 @@ export async function pollChecks(
 				checks: await getChecksForSha(sha, cwd, signal),
 				timedOut: true,
 				polls,
-				mode,
+				label,
 			};
 		}
 
@@ -297,15 +297,15 @@ export async function pollChecks(
 			else emptyPolls = 0;
 
 			if (suitesComplete && emptyPolls >= GRACE_POLLS) {
-				onStatus?.(`No checks were registered for ${mode}.`);
-				return { checks, timedOut: false, polls, mode };
+				onStatus?.(`No checks were registered for ${label}.`);
+				return { checks, timedOut: false, polls, label };
 			}
-			onStatus?.(`Poll ${polls}: no checks registered yet for ${mode}, waiting…`);
+			onStatus?.(`Poll ${polls}: no checks registered yet for ${label}, waiting…`);
 		} else {
 			emptyPolls = 0;
 			if (pending === 0 && suitesComplete) {
-				onStatus?.(`All ${total} checks finished for ${mode}.`);
-				return { checks, timedOut: false, polls, mode };
+				onStatus?.(`All ${total} checks finished for ${label}.`);
+				return { checks, timedOut: false, polls, label };
 			}
 			// Track if we've ever seen all checks complete to avoid API blips resetting progress
 			if (pending === 0) {
@@ -316,14 +316,14 @@ export async function pollChecks(
 				settlingPolls++;
 				if (settlingPolls >= GRACE_POLLS) {
 					onStatus?.(
-						`All ${total} checks finished for ${mode} (suites never fully settled, proceeding).`,
+						`All ${total} checks finished for ${label} (suites never fully settled, proceeding).`,
 					);
-					return { checks, timedOut: false, polls, mode };
+					return { checks, timedOut: false, polls, label };
 				}
 			}
 			const note = suitesComplete ? "" : " (suites still settling)";
 			onStatus?.(
-				`Poll ${polls}: ${total - pending}/${total} checks finished for ${mode}, ${pending} still running${note}…`,
+				`Poll ${polls}: ${total - pending}/${total} checks finished for ${label}, ${pending} still running${note}…`,
 			);
 		}
 
@@ -335,7 +335,7 @@ export async function pollChecks(
 		checks: await getChecksForSha(sha, cwd, signal),
 		timedOut: true,
 		polls,
-		mode,
+		label,
 	};
 }
 
