@@ -19,11 +19,35 @@ export const BANNED_FOLDERS: string[] = [
 const FILE_MANIP_COMMANDS = new Set([
 	"cp", "mv", "rm", "chmod", "chown", "ln", "install",
 	"mkdir", "touch",
+	// tee and rsync write to path arguments directly, the same way cp/mv do —
+	// `echo x | tee .git/hooks/pre-commit` and `rsync -a src/ .git/` are just
+	// as much a write into a banned folder as `cp src .git/hooks/pre-commit`.
+	"tee", "rsync",
+	// dd writes to its `of=` argument (and reads from `if=`), not a bare
+	// positional path — see extractPathArg.
+	"dd",
 	// sudo/doas wrap these commands; scanning their args catches
 	// e.g. "sudo cp file .git/x" — subcommand names won't match
 	// banned folder patterns, only actual paths will.
 	"sudo", "doas",
 ]);
+
+/** `dd`'s path-bearing option keys, e.g. `of=path`, `if=path`. */
+const DD_PATH_KEYS = new Set(["if", "of"]);
+
+/**
+ * Extract the path a command's argument actually refers to, or null if the
+ * argument isn't path-shaped for that command. Most commands take bare
+ * positional paths; `dd` instead takes `key=value` options, only some of
+ * which (`if=`, `of=`) name a path.
+ */
+function extractPathArg(commandName: string, arg: string): string | null {
+	if (commandName !== "dd") return arg;
+	const eq = arg.indexOf("=");
+	if (eq === -1) return null;
+	if (!DD_PATH_KEYS.has(arg.slice(0, eq))) return null;
+	return arg.slice(eq + 1);
+}
 
 /**
  * Scan a shell command string for file-manipulation commands targeting
@@ -46,8 +70,9 @@ export function findBannedFolderTarget(
 		if (!FILE_MANIP_COMMANDS.has(inv.name)) continue;
 		for (const arg of inv.args) {
 			if (arg.startsWith("-")) continue;
-			if (isPathInsideBannedFolder(arg, bannedFolders)) {
-				return arg;
+			const path = extractPathArg(inv.name, arg);
+			if (path && isPathInsideBannedFolder(path, bannedFolders)) {
+				return path;
 			}
 		}
 	}

@@ -95,6 +95,26 @@ test("detects command through sudo wrapper", () => {
 	assert.equal(findBannedFolderTarget("sudo cp file .git/somewhere", BANNED_FOLDERS), ".git/somewhere");
 });
 
+test("detects tee writing into .git", () => {
+	assert.equal(findBannedFolderTarget("echo bad | tee .git/hooks/pre-commit", BANNED_FOLDERS), ".git/hooks/pre-commit");
+});
+
+test("detects rsync targeting .git", () => {
+	assert.equal(findBannedFolderTarget("rsync -a src/ .git/hooks/", BANNED_FOLDERS), ".git/hooks/");
+});
+
+test("detects dd writing to .git via of=", () => {
+	assert.equal(findBannedFolderTarget("dd if=payload of=.git/hooks/pre-commit", BANNED_FOLDERS), ".git/hooks/pre-commit");
+});
+
+test("detects dd reading from .git via if=", () => {
+	assert.equal(findBannedFolderTarget("dd if=.git/config of=/tmp/out", BANNED_FOLDERS), ".git/config");
+});
+
+test("ignores unrelated dd key=value options", () => {
+	assert.equal(findBannedFolderTarget("dd if=payload of=/tmp/out bs=1M", BANNED_FOLDERS), null);
+});
+
 test("detects command when target is node_modules", () => {
 	assert.equal(findBannedFolderTarget("rm -rf node_modules", BANNED_FOLDERS), "node_modules");
 });
