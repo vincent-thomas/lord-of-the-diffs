@@ -553,10 +553,10 @@ export async function getBranchShaViaApi(
 export async function mergeBaseBranchIntoCurrent(
 	cwd: string,
 	baseBranch: string,
-	currentBranch: string,
+	branch: string,
 	signal?: AbortSignal,
 ): Promise<MergeResult> {
-	const safeBranch = currentBranch.replace(/[^a-zA-Z0-9_-]/g, "-");
+	const safeBranch = branch.replace(/[^a-zA-Z0-9_-]/g, "-");
 	const worktreePath = `/tmp/vt-pi-merge-${safeBranch}-${Date.now()}`;
 
 	// Helper to clean up the worktree (best-effort).
