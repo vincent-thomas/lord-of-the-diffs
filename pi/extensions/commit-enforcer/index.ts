@@ -12,9 +12,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { checkGitState, buildNagMessage } from "./logic.ts";
 
-// ── In-memory state (per-session) ───────────────────────────────────────────
-let yieldedWithReason: string | null = null;
-
 const ENFORCER_SYSTEM_PROMPT = `
 
 ## Commit Enforcement Policy
@@ -30,11 +27,14 @@ If you have a valid reason not to commit or push, call
 This is your last resort — always prefer committing and pushing.
 `;
 
-function resetState() {
-  yieldedWithReason = null;
-}
-
 export default function (pi: ExtensionAPI) {
+  // ── In-memory state (per-session) ───────────────────────────────────────
+  let yieldedWithReason: string | null = null;
+
+  function resetState() {
+    yieldedWithReason = null;
+  }
+
   // ── Tool: yield_with_uncommitted_changes (escape hatch) ────────────────
   pi.registerTool({
     name: "yield_with_uncommitted_changes",
