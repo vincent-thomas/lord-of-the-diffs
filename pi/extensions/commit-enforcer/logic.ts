@@ -25,7 +25,7 @@ export async function hasUnpushedCommits(
 	signal?: AbortSignal,
 ): Promise<boolean> {
 	try {
-		const branch = currentBranch(cwd);
+		const branch = await currentBranch(cwd, signal);
 		if (!branch) return false;
 
 		const upstream = await hasUpstream(cwd, signal);

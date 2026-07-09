@@ -41,7 +41,7 @@ export default function (pi: ExtensionAPI) {
 			const cwd = ctx.cwd;
 
 			// 1. Check default branch.
-			const branch = currentBranch(cwd);
+			const branch = await currentBranch(cwd, signal);
 			if (branch && isDefaultBranch(branch)) {
 				return {
 					content: [
