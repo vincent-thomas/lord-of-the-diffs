@@ -15,6 +15,10 @@ export interface GitState {
  * Check whether the current branch has commits that haven't been pushed.
  * Requires an upstream to be set. Returns false if not a git repo or
  * no upstream is configured.
+ *
+ * Not the same check as fix-ci/logic.ts's `needsPush`, which compares
+ * against the remote via `git ls-remote` and fails open — this one is a
+ * soft nag before yielding, so it fails closed instead.
  */
 export async function hasUnpushedCommits(
 	cwd: string,

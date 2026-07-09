@@ -10,7 +10,7 @@ import {
 	mapCheckRun,
 	mapStatusState,
 	allSuitesComplete,
-	hasUnpushedCommits,
+	needsPush,
 	gitPush,
 	extractRunId,
 	trimLog,
@@ -178,7 +178,7 @@ suite("parseReviewComments", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test helpers — shared by the hasUnpushedCommits and gitPush suites below
+// Test helpers — shared by the needsPush and gitPush suites below
 // ---------------------------------------------------------------------------
 
 function git(cmd: string, cwd: string): string {
@@ -211,14 +211,14 @@ function withGitRepos(
 }
 
 // ---------------------------------------------------------------------------
-// hasUnpushedCommits
+// needsPush
 // ---------------------------------------------------------------------------
 
-suite("hasUnpushedCommits", () => {
+suite("needsPush", () => {
 	test(
 		"returns false when branch is up to date",
 		withGitRepos(async (local) => {
-			const result = await hasUnpushedCommits(local);
+			const result = await needsPush(local);
 			assert.equal(result, false);
 		}),
 	);
@@ -229,7 +229,7 @@ suite("hasUnpushedCommits", () => {
 			writeFileSync(join(local, "new.txt"), "new");
 			git("git add .", local);
 			git("git commit -m 'new file'", local);
-			const result = await hasUnpushedCommits(local);
+			const result = await needsPush(local);
 			assert.equal(result, true);
 		}),
 	);
@@ -241,7 +241,7 @@ suite("hasUnpushedCommits", () => {
 			writeFileSync(join(local, "branch.txt"), "branch");
 			git("git add .", local);
 			git("git commit -m 'branch commit'", local);
-			const result = await hasUnpushedCommits(local);
+			const result = await needsPush(local);
 			assert.equal(result, true);
 		}),
 	);
@@ -253,7 +253,7 @@ suite("hasUnpushedCommits", () => {
 			git("git add .", local);
 			git("git commit -m 'new file'", local);
 			git("git push", local);
-			const result = await hasUnpushedCommits(local);
+			const result = await needsPush(local);
 			assert.equal(result, false);
 		}),
 	);
@@ -273,7 +273,7 @@ suite("gitPush", () => {
 
 			const result = await gitPush(local);
 			assert.equal(result.success, true);
-			assert.equal(await hasUnpushedCommits(local), false);
+			assert.equal(await needsPush(local), false);
 		}),
 	);
 
@@ -295,7 +295,7 @@ suite("gitPush", () => {
 				local,
 			);
 			assert.equal(upstream, "origin/feature/new");
-			assert.equal(await hasUnpushedCommits(local), false);
+			assert.equal(await needsPush(local), false);
 		}),
 	);
 });
