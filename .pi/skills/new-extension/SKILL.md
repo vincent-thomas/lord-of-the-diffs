@@ -103,8 +103,8 @@ export default function (pi: ExtensionAPI) {
   - `../../lib/exec-async.ts` — `execAsync`, `extractErrorOutput`
   - `../../lib/command-utils.ts` — `commandInvocation`, `splitCommandSegments`, `findCommandUse`
   - `../../lib/git-utils.ts` — `currentBranch`, `isDefaultBranch`, `hasUpstream`, `isWorktreeDirty`
-  - `../../lib/ban-command-extension.ts` — `createCommandPolicyExtension`, `CommandPolicyEntry`, `CommandPolicyStatus`
-  - `../../lib/precheck.ts` — `runPreChecks`, `detectProjects`
+  - `@vt-pi/command-policy` (the `packages/command-policy` workspace package) — `createCommandPolicyExtension`, `CommandPolicyEntry`, `CommandPolicyStatus`
+  - `../../lib/precheck.ts` — `runPreChecks`
 - Export types, interfaces, and functions that `index.ts` uses
 - All shell commands go through `execAsync()` (from `../../lib/exec-async.ts`) to avoid blocking the event loop
 
