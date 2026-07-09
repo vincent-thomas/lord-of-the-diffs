@@ -71,18 +71,33 @@ export async function gitPush(cwd: string, signal?: AbortSignal): Promise<PushRe
 // Check mode detection
 // ---------------------------------------------------------------------------
 
-export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise<number | null> {
+/**
+ * Run a shell command and return its trimmed stdout, or null if it fails or
+ * produces no output. Shared by the many read-only `git`/`gh` lookups below.
+ */
+async function tryExec(
+	command: string,
+	cwd: string,
+	timeout: number,
+	signal?: AbortSignal,
+): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync("gh pr view --json number,state --jq 'select(.state != \"CLOSED\" and .state != \"MERGED\") | .number' 2>/dev/null", {
-			cwd,
-			timeout: 15_000,
-			signal,
-		});
-		const num = parseInt(stdout.trim(), 10);
-		return isNaN(num) ? null : num;
+		const { stdout } = await execAsync(command, { cwd, timeout, signal });
+		return stdout.trim() || null;
 	} catch {
 		return null;
 	}
+}
+
+export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise<number | null> {
+	const stdout = await tryExec(
+		"gh pr view --json number,state --jq 'select(.state != \"CLOSED\" and .state != \"MERGED\") | .number' 2>/dev/null",
+		cwd,
+		15_000,
+		signal,
+	);
+	const num = stdout ? parseInt(stdout, 10) : NaN;
+	return isNaN(num) ? null : num;
 }
 
 /**
@@ -90,29 +105,11 @@ export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise
  * Returns null if there is no PR for the current branch.
  */
 export async function getPrState(cwd: string, signal?: AbortSignal): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync("gh pr view --json state --jq '.state' 2>/dev/null", {
-			cwd,
-			timeout: 15_000,
-			signal,
-		});
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec("gh pr view --json state --jq '.state' 2>/dev/null", cwd, 15_000, signal);
 }
 
 export async function getHeadSha(cwd: string, signal?: AbortSignal): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync("git rev-parse HEAD", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec("git rev-parse HEAD", cwd, 5_000, signal);
 }
 
 /**
@@ -484,28 +481,22 @@ export async function getPrBaseBranch(
 	signal?: AbortSignal,
 ): Promise<string | null> {
 	// Try to get the base branch from an existing PR first.
-	try {
-		const { stdout } = await execAsync(
-			"gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null",
-			{ cwd, timeout: 15_000, signal },
-		);
-		const baseFromPr = stdout.trim();
-		if (baseFromPr) return baseFromPr;
-	} catch {
-		// No PR yet — fall through to default branch detection.
-	}
+	const baseFromPr = await tryExec(
+		"gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null",
+		cwd,
+		15_000,
+		signal,
+	);
+	if (baseFromPr) return baseFromPr;
 
 	// Fall back to the repo's default branch (e.g. "main") when no PR exists.
 	// This ensures the base-branch-ahead check runs even on the first push.
-	try {
-		const { stdout } = await execAsync(
-			"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
-			{ cwd, timeout: 15_000, signal },
-		);
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec(
+		"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null",
+		cwd,
+		15_000,
+		signal,
+	);
 }
 
 /**
@@ -516,15 +507,7 @@ export async function getPrMergeableStatus(
 	cwd: string,
 	signal?: AbortSignal,
 ): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync(
-			"gh pr view --json mergeable --jq '.mergeable' 2>/dev/null",
-			{ cwd, timeout: 15_000, signal },
-		);
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec("gh pr view --json mergeable --jq '.mergeable' 2>/dev/null", cwd, 15_000, signal);
 }
 
 /**
@@ -536,15 +519,12 @@ export async function getBranchShaViaApi(
 	branch: string,
 	signal?: AbortSignal,
 ): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync(
-			`gh api "repos/{owner}/{repo}/git/ref/heads/${branch}" --jq '.object.sha' 2>/dev/null`,
-			{ cwd, timeout: 15_000, signal },
-		);
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec(
+		`gh api "repos/{owner}/{repo}/git/ref/heads/${branch}" --jq '.object.sha' 2>/dev/null`,
+		cwd,
+		15_000,
+		signal,
+	);
 }
 
 /**
