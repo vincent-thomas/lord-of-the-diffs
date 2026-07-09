@@ -65,6 +65,11 @@ test("supports banned flags per entry", () => {
 	assert.ok(findEntry("git checkout")?.bannedFlags?.includes("-b"));
 });
 
+test("cp bans -a/--archive, not just -r/-R/--recursive — archive mode also copies recursively", () => {
+	assert.ok(findEntry("cp")?.bannedFlags?.includes("-a"));
+	assert.ok(findEntry("cp")?.bannedFlags?.includes("--archive"));
+});
+
 test("supports allowed flags per allowed entry", () => {
 	assert.ok(findEntry("git status")?.allowedFlags?.includes("--short"));
 	assert.equal(findEntry("git status")?.bannedFlags, undefined);
