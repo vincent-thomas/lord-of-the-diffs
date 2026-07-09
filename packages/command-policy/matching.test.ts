@@ -96,12 +96,23 @@ test("exact command name", () => {
 
 test("predicate command match", () => {
 	const use: CommandUse = { name: "python3", args: ["-c", "'x'"], segment: "python3 -c 'x'" };
-	assert.ok(matchesEntry(use, { name: "Python", status: CommandPolicyStatus.Banned, command: (c: string) => /^python(?:\d+(?:\.\d+)?)?$/.test(c) }));
+	assert.ok(matchesEntry(use, { name: "Python", status: CommandPolicyStatus.Banned, command: (u) => /^python(?:\d+(?:\.\d+)?)?$/.test(u.name) }));
 });
 
 test("predicate does not match unrelated command", () => {
 	const use: CommandUse = { name: "pythonize", args: [], segment: "pythonize" };
-	assert.ok(!matchesEntry(use, { name: "Python", status: CommandPolicyStatus.Banned, command: (c: string) => /^python(?:\d+(?:\.\d+)?)?$/.test(c) }));
+	assert.ok(!matchesEntry(use, { name: "Python", status: CommandPolicyStatus.Banned, command: (u) => /^python(?:\d+(?:\.\d+)?)?$/.test(u.name) }));
+});
+
+test("predicate can match on args, not just command name", () => {
+	const use: CommandUse = { name: "cp", args: ["file", ".git/x"], segment: "cp file .git/x" };
+	assert.ok(
+		matchesEntry(use, {
+			name: "protected folder",
+			status: CommandPolicyStatus.Banned,
+			command: (u) => u.args.some((a) => a.includes(".git")),
+		}),
+	);
 });
 
 test("subcommand matches exact subcommand", () => {
