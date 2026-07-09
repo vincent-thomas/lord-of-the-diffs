@@ -105,16 +105,6 @@ async function fetchBranch(cwd: string, branch: string, signal?: AbortSignal): P
 	});
 }
 
-/** Returns the current branch name via async git (see file header re: why not execSync). */
-async function getCurrentBranchAsync(cwd: string, signal?: AbortSignal): Promise<string> {
-	const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", {
-		cwd,
-		timeout: 5_000,
-		signal,
-	});
-	return stdout.trim();
-}
-
 const GH_DEFAULT_BRANCH_QUERY =
 	"gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null";
 const GH_PR_BASE_BRANCH_QUERY = "gh pr view --json baseRefName --jq '.baseRefName' 2>/dev/null";
@@ -167,7 +157,8 @@ export async function needsPush(
 	signal?: AbortSignal,
 ): Promise<boolean> {
 	try {
-		const branch = await getCurrentBranchAsync(cwd, signal);
+		const branch = await currentBranch(cwd, signal);
+		if (!branch) return true;
 		const { stdout: localSha } = await execAsync(
 			"git rev-parse HEAD",
 			{ cwd, timeout: 5_000, signal },
@@ -794,7 +785,8 @@ export async function generatePrTitle(
 	signal?: AbortSignal,
 ): Promise<string> {
 	try {
-		let branch = await getCurrentBranchAsync(cwd, signal);
+		let branch = await currentBranch(cwd, signal);
+		if (!branch) return "Changes from push_and_check_ci";
 
 		// Remove vt_ prefix if present.
 		if (branch.startsWith("vt_")) {
@@ -879,7 +871,8 @@ export async function createDraftPr(
 ): Promise<{ success: boolean; url: string | null; output: string }> {
 	try {
 		// Get the current branch name to pass explicitly via --head.
-		const head = await getCurrentBranchAsync(cwd, signal);
+		const head = await currentBranch(cwd, signal);
+		if (!head) return { success: false, url: null, output: "Could not determine current branch." };
 
 		// Detect the default base branch via gh.
 		const base = await getDefaultBranch(cwd, signal);
