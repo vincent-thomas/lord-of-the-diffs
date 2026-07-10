@@ -4,12 +4,19 @@
 	"version": "0.0.0",
 	"type": "module",
 	"exports": {
-		".": "./index.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
 	},
 	"scripts": {
+		"build": "tsc",
 		"test": "node --test"
 	},
 	"dependencies": {
 		"@mariozechner/pi-coding-agent": "^0.73.1"
+	},
+	"devDependencies": {
+		"typescript": "^7.0.2"
 	}
 }

@@ -135,7 +135,7 @@ vt-pi/
 ├── flake.lock
 ├── Makefile                   # Defines what "valid" means
 └── packages/
-    ├── agent-lord/             # Standalone @vt-pi/agent-lord npm package
+    ├── agent-lord/             # Standalone @vt-pi/agent-lord pnpm package
     │   ├── AGENTS.md           # System prompt (bundled into binary)
     │   ├── extensions/
     │   │   ├── advisor/        # Wires the advisor tool into @vt-pi/agent-advisor

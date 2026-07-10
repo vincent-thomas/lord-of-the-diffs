@@ -1,2 +1,2 @@
 all:
-	@nix build
+	@nix build -L

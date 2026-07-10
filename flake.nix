@@ -23,6 +23,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
+        pnpm = pkgs.pnpm_10;
 
         # ── Token generator for GitHub App auth ──────────────────────────────
         # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
@@ -238,101 +239,102 @@
           };
         };
 
-        # ── npm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
-        # ── plus the @vt-pi/* workspace links npm sets up automatically) ──────
-        workspaceDeps = pkgs.buildNpmPackage {
+        # ── pnpm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
+        # ── plus the @vt-pi/* workspace links pnpm sets up via shamefully-hoist) ──
+        workspaceDeps = pkgs.stdenv.mkDerivation {
           pname = "vt-pi-workspace-deps";
           version = "0.0.0";
 
           src = ./.;
 
-          # Hash covers all npm deps declared in the root package-lock.json.
+          # Hash covers all pnpm deps declared in the root pnpm-lock.yaml.
           # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
-          npmDepsHash = "sha256-Udv4wvgayF7oqsxAef+jMvGoAvbVDhGFB5Si3H0EEU4=";
-
-          inherit nodejs;
+          pnpmDeps = pkgs.fetchPnpmDeps {
+            pname = "vt-pi-workspace-deps";
+            version = "0.0.0";
+            src = ./.;
+            inherit pnpm;
+            fetcherVersion = 4;
+            hash = "sha256-o/hjmTOxdir4MMvL9Qq6f1pP2OWN+h0GK7q6ksliYRc=";
+          };
 
           # git is needed on PATH for the checkPhase below — several tests
           # (git-commit, fix-ci) shell out to a real `git` binary.
-          nativeBuildInputs = [ pkgs.git ];
+          nativeBuildInputs = [
+            nodejs
+            pnpm
+            pkgs.pnpmConfigHook
+            pkgs.git
+          ];
 
-          # No build step for these workspace members — just install deps.
-          # --ignore-scripts avoids native compilation for transitive deps
-          # (e.g. photon-node), same reasoning as piBase above.
-          dontNpmBuild = true;
-          npmFlags = [ "--ignore-scripts" ];
-
-          # dontNpmBuild only skips buildNpmPackage's own "npm run build"
-          # step — it doesn't stop stdenv's generic buildPhase from noticing
-          # this repo's own root Makefile (copied in via `src = ./.`) and
-          # running `make` (which runs `nix build`, recursively — not
-          # available inside this derivation's sandbox). Override buildPhase
-          # outright so nothing auto-detects it.
+          # pnpmConfigHook's `pnpm install` already passes --ignore-scripts,
+          # avoiding native compilation for transitive deps (e.g. photon-node),
+          # same reasoning as piBase above.
+          #
+          # Override buildPhase outright rather than leaving stdenv's generic
+          # one in place, which would notice this repo's own root Makefile
+          # (copied in via `src = ./.`) and run `make` — which runs `nix
+          # build`, recursively, not available inside this derivation's
+          # sandbox.
+          #
+          # @vt-pi/command-policy, @vt-pi/agent-explorer, and
+          # @vt-pi/agent-advisor are plain, build-step-free TypeScript
+          # everywhere *except* here: Node refuses to type-strip a .ts file
+          # whose real path resolves under any node_modules directory, and
+          # `pnpm deploy` (installPhase, below) always materializes workspace
+          # dependencies through its node_modules/.pnpm store. Compile them to
+          # plain .js here so the deployed tree has no raw .ts sitting inside
+          # node_modules — and so agent-lord's own tests below, which import
+          # @vt-pi/command-policy's runtime CommandPolicyStatus by package
+          # name, resolve real files instead of failing outright (buildPhase
+          # runs before checkPhase; the reverse order 404s on dist/index.js).
+          #
+          # --reporter=append-only: pnpm's default reporter redraws its
+          # progress tree in place via cursor control, which only works
+          # attached to a real TTY. Nix's build sandbox has none, so without
+          # this every redraw frame gets captured as its own log line —
+          # burying whatever a failing command actually printed under a wall
+          # of near-blank lines.
           buildPhase = ''
             runHook preBuild
+            pnpm --reporter=append-only -r run build
             runHook postBuild
           '';
 
           # Run the workspace test suite here, where the repo's real
-          # layout (root package.json + pi/ + packages/*) and freshly
+          # layout (root package.json + packages/*) and freshly
           # installed node_modules already match up — no copying needed.
           doCheck = true;
           checkPhase = ''
             runHook preCheck
-            npm test --workspaces --if-present
+            pnpm --reporter=append-only -r test
             runHook postCheck
           '';
 
           installPhase = ''
             runHook preInstall
             mkdir -p $out
-            # -L dereferences the @vt-pi/* workspace symlinks npm creates so
-            # this derivation's node_modules is fully self-contained — no
-            # dangling symlinks back into this build's own (different) tree.
-            cp -rL node_modules $out/
+
+            # Deploy @vt-pi/agent-lord as a self-contained tree: its own
+            # extensions/lib/skills/AGENTS.md alongside a node_modules
+            # where every @vt-pi/* dependency (and all real deps like
+            # @mariozechner/pi-coding-agent) are fully materialized —
+            # no symlinks back into this build's own (different) tree.
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
+
             runHook postInstall
           '';
         };
 
         # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
+        # workspaceDeps already deployed @vt-pi/agent-lord as a self-contained
+        # tree (extensions/lib/skills/AGENTS.md + a node_modules with every
+        # @vt-pi/* and real dependency fully materialized) — just copy it.
         piCustomizations =
-          pkgs.runCommand "pi-customizations"
-            {
-              nativeBuildInputs = [
-                nodejs
-                pkgs.git
-              ];
-            }
-            ''
-              mkdir -p $out/extensions $out/lib $out/skills $out/packages
-
-              # Copy extensions + lib + packages so ../lib/ imports and
-              # @vt-pi/command-policy imports both work
-              cp -r ${./packages/agent-lord/extensions}/. $out/extensions/
-              cp -r ${./packages/agent-lord/lib}/. $out/lib/
-              cp -r ${./packages}/. $out/packages/
-
-              # Copy skills, AGENTS.md, and bin scripts
-              cp -r ${./packages/agent-lord/skills}/. $out/skills/
-              cp ${./packages/agent-lord/AGENTS.md} $out/AGENTS.md
-
-              # Real npm deps (@mariozechner/pi-coding-agent, …) from
-              # workspaceDeps. Its @vt-pi/command-policy, @vt-pi/agent-explorer,
-              # and @vt-pi/agent-advisor entries were dereferenced from a
-              # differently-shaped tree (this repo's own packages/* layout) so
-              # they don't match this derivation's flattened
-              # $out/{lib,extensions,packages}; replace them with symlinks
-              # that do. Same story for @vt-pi/agent-lord — nothing resolves
-              # it by package name (lib/ and extensions/* use relative
-              # imports), so it's simply dropped rather than relinked.
-              cp -r ${workspaceDeps}/node_modules $out/node_modules
-              chmod -R u+w $out/node_modules
-              rm -rf $out/node_modules/@vt-pi
-              mkdir -p $out/node_modules/@vt-pi
-              ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
-              ln -s ../../packages/agent-explorer $out/node_modules/@vt-pi/agent-explorer
-              ln -s ../../packages/agent-advisor $out/node_modules/@vt-pi/agent-advisor
-            '';
+          pkgs.runCommand "pi-customizations" { } ''
+            cp -r ${workspaceDeps}/agent-lord $out
+            chmod -R u+w $out
+          '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
         pi =
@@ -355,11 +357,10 @@
               mkdir -p $out/share/pi
               cp -r ${piCustomizations}/extensions $out/share/pi/extensions
               cp -r ${piCustomizations}/lib $out/share/pi/lib
-              cp -r ${piCustomizations}/packages $out/share/pi/packages
               cp -r ${piCustomizations}/skills $out/share/pi/skills
               cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
 
-              # Same node_modules (real deps + @vt-pi/* workspace symlinks) as
+              # Same node_modules (real deps + @vt-pi/* deployed packages) as
               # piCustomizations, so extensions can resolve them at runtime too.
               cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
               chmod -R u+w $out/share/pi/node_modules
