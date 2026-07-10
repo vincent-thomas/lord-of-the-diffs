@@ -255,7 +255,7 @@
             src = ./.;
             inherit pnpm;
             fetcherVersion = 4;
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            hash = "sha256-o/hjmTOxdir4MMvL9Qq6f1pP2OWN+h0GK7q6ksliYRc=";
           };
 
           # git is needed on PATH for the checkPhase below — several tests
