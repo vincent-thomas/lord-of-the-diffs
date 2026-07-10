@@ -174,21 +174,16 @@
             # Nix's sandbox may block network; if so, skip gracefully.
             echo ""
             echo "--- npm audit ---"
-            # Capture exit code via || (works even with shell -e: the ||
-            # chain means set -e never kills the build). Exit 0 = no vulns
-            # at audit_level, 1 = vulns found, 2+ = error (no network).
-            audit_exit=0
-            npm audit --audit-level=high --json 2>&1 >"$TMPDIR/npm-audit.json" || audit_exit=$?
-            if [ -f "$TMPDIR/npm-audit.json" ] && [ -s "$TMPDIR/npm-audit.json" ]; then
-              if [ "$audit_exit" -eq 0 ]; then
-                echo "npm audit: no high/critical vulnerabilities"
-              elif [ "$audit_exit" -eq 1 ]; then
-                HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' "$TMPDIR/npm-audit.json")
-                CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' "$TMPDIR/npm-audit.json")
-                echo "⚠  npm audit: $HIGH high, $CRITICAL critical vulnerabilities found"
-                echo ""
-                echo "  Run locally to inspect:  npm audit --audit-level=high"
-              fi
+            # `if cmd; then` (rather than `cmd || …`) is the standard way to run a
+            # command that may fail without set -e aborting the build.
+            if npm audit --audit-level=high --json 2>&1 >"$TMPDIR/npm-audit.json"; then
+              echo "npm audit: no high/critical vulnerabilities"
+            elif [ -s "$TMPDIR/npm-audit.json" ]; then
+              HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' "$TMPDIR/npm-audit.json")
+              CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' "$TMPDIR/npm-audit.json")
+              echo "⚠  npm audit: $HIGH high, $CRITICAL critical vulnerabilities found"
+              echo ""
+              echo "  Run locally to inspect:  npm audit --audit-level=high"
             else
               echo "npm audit: registry unreachable (no network in Nix sandbox)"
               echo "  Run locally to check:  npm audit --audit-level=high"
@@ -358,14 +353,16 @@
 
               # Add customizations to share/pi/ (package.json/pnpm-lock etc.
               # from piCustomizations' deploy tree are deliberately left out).
+              # Symlinked rather than copied: piCustomizations already fully
+              # materialized this tree (including node_modules, which pnpm
+              # deploy fully resolves with no dangling symlinks of its own),
+              # and nothing here writes to it afterward.
               mkdir -p $out/share/pi
-              cp -r ${piCustomizations}/{extensions,lib,skills} $out/share/pi/
-              cp ${piCustomizations}/AGENTS.md $out/share/pi/
-
-              # Same node_modules (real deps + @vt-pi/* deployed packages) as
-              # piCustomizations, so extensions can resolve them at runtime too.
-              cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
-              chmod -R u+w $out/share/pi/node_modules
+              ln -s ${piCustomizations}/extensions $out/share/pi/extensions
+              ln -s ${piCustomizations}/lib $out/share/pi/lib
+              ln -s ${piCustomizations}/skills $out/share/pi/skills
+              ln -s ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+              ln -s ${piCustomizations}/node_modules $out/share/pi/node_modules
 
               # Build --extension / --skill flags for every bundled item.
               # Skip test files (*.test.ts) - they're for build-time validation only.
