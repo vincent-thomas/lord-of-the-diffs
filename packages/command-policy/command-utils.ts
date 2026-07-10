@@ -1,12 +1,9 @@
 /**
  * command-utils.ts — shell command parsing used by the matching engine.
  *
- * This is a self-contained copy of the same-named module in this repo's
- * pi/lib/ (@vt-pi/lib) — kept duplicated on purpose so this package has no
- * dependency on anything else in the vt-pi workspace, only on
- * @mariozechner/pi-coding-agent. See pi/lib/command-utils.test.ts for the
- * exhaustive parser test suite; this copy is exercised indirectly through
- * matching.test.ts and predicates.test.ts.
+ * Self-contained: no dependency on anything else in the vt-pi workspace,
+ * only on @mariozechner/pi-coding-agent. Exercised indirectly through
+ * matching.test.ts.
  *
  * The goal is to find the *real* executable a shell segment runs, seeing
  * through environment-variable prefixes (`FOO=bar cmd`), command wrappers

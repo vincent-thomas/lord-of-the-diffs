@@ -101,7 +101,6 @@ export default function (pi: ExtensionAPI) {
 - **No imports from `@mariozechner/pi-coding-agent`** — keep it pure TypeScript
 - Import shared helpers from `../../lib/`:
   - `../../lib/exec-async.ts` — `execAsync`, `extractErrorOutput`
-  - `../../lib/command-utils.ts` — `commandInvocation`, `splitCommandSegments`, `findCommandUse`
   - `../../lib/git-utils.ts` — `currentBranch`, `isDefaultBranch`, `hasUpstream`, `isWorktreeDirty`
   - `@vt-pi/command-policy` (the `packages/command-policy` workspace package) — `createCommandPolicyExtension`, `CommandPolicyEntry`, `CommandPolicyStatus`
   - `../../lib/precheck.ts` — `runPreChecks`
