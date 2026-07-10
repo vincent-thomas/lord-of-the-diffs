@@ -5,11 +5,18 @@
  */
 
 /**
- * Blank out the contents of every quoted span in `command`, replacing each
- * character (quotes included) with a space so a `>` that only appears inside
+ * Replace the contents of every quoted span in `command` (quotes included)
+ * with a non-whitespace placeholder (`x`), so a `>` that only appears inside
  * a string literal — e.g. `echo "score > threshold"` — can never match as a
- * redirection. Character count is preserved, so match indices/text still
- * line up with the original string for unquoted matches.
+ * redirection operator. Character count is preserved, so match indices/text
+ * still line up with the original string for unquoted matches.
+ *
+ * Deliberately masks to a non-space filler rather than blanking to spaces:
+ * a *quoted redirection target* — `echo hi > "file.txt"`, an entirely
+ * ordinary way to write a redirect — is just as real a file write as an
+ * unquoted one, and needs to still read as a non-empty `\S+` token after
+ * masking. Blanking to spaces made every quoted target disappear entirely,
+ * which let `> "file"` sail past this guard undetected.
  */
 function maskQuotedSpans(command: string): string {
 	let out = "";
@@ -17,23 +24,23 @@ function maskQuotedSpans(command: string): string {
 	let escape = false;
 	for (const ch of command) {
 		if (escape) {
-			out += quote ? " " : ch;
+			out += quote ? "x" : ch;
 			escape = false;
 			continue;
 		}
 		if (ch === "\\" && quote !== "'") {
-			out += quote ? " " : ch;
+			out += quote ? "x" : ch;
 			escape = true;
 			continue;
 		}
 		if (quote) {
-			out += ch === quote ? " " : " ";
+			out += "x";
 			if (ch === quote) quote = null;
 			continue;
 		}
 		if (ch === "'" || ch === '"') {
 			quote = ch;
-			out += " ";
+			out += "x";
 			continue;
 		}
 		out += ch;
@@ -58,9 +65,11 @@ export function hasFileWriteRedirection(command: string): { found: boolean; segm
 	const match = pattern.exec(maskQuotedSpans(command));
 
 	if (match) {
+		// Report the matched span from the original text, not the masked
+		// placeholder text, so a quoted target shows its real filename.
 		return {
 			found: true,
-			segment: match[0].trim(),
+			segment: command.slice(match.index, match.index + match[0].length).trim(),
 		};
 	}
 
