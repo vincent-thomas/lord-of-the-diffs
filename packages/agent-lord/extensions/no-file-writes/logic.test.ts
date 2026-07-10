@@ -33,6 +33,8 @@ const shouldBlock = [
 	"cmd 2>/tmp/errors.log",
 	"build 3>output.txt",
 	"cmd 2>&1 3>trace.log",
+	// A real redirection following a quoted arg that itself contains `>`.
+	'echo "score > threshold" > result.txt',
 ];
 
 for (const cmd of shouldBlock) {
@@ -60,6 +62,11 @@ const shouldPass = [
 	"echo concatenate things",
 	"which printf",
 	"man echo",
+	// `>` inside a quoted string is text, not a redirection.
+	'echo "score > threshold"',
+	'git commit -m "value > 5 means pass"',
+	"echo 'a >> b'",
+	`rg "foo>bar" file.txt`,
 ];
 
 for (const cmd of shouldPass) {
