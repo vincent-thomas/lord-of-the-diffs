@@ -1,0 +1,17 @@
+{
+	"name": "@vt-pi/agent-explorer",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		".": "./index.ts"
+	},
+	"scripts": {
+		"test": "node --test"
+	},
+	"dependencies": {
+		"@mariozechner/pi-coding-agent": "^0.73.1",
+		"@mariozechner/pi-ai": "^0.73.1",
+		"typebox": "^1.1.24"
+	}
+}

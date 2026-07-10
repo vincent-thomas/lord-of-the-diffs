@@ -90,6 +90,17 @@ the user.
 Blocks all shell redirections (`>`, `>>`) to files. The agent must use the
 `write` or `edit` tools instead.
 
+### Explore (`packages/agent-lord/extensions/explore/`, `packages/agent-explorer/`)
+
+An `explore` tool that delegates read-only search/exploration questions to a
+separate sub-agent session, run in-process via the Pi SDK (`createAgentSession`)
+rather than a subprocess. It's restricted to `read`/`grep`/`find`/`ls` (no
+write, edit, or bash), runs on a cheaper/faster model by default, and has no
+extensions, skills, or `AGENTS.md` of its own — it starts clean rather than
+inheriting agent-lord's system prompt. This keeps multi-file "where is X" /
+"how does Y work" questions off agent-lord's own (pricier) model and out of
+its own context, at the cost of one round trip into a fresh sub-session.
+
 ### Sandbox (`packages/agent-lord/extensions/sandbox/`)
 
 A `/sandbox` command that puts the agent in read-only mode. In sandbox mode,
@@ -115,6 +126,7 @@ vt-pi/
     │   ├── extensions/
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
     │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
+    │   │   ├── explore/        # Wires the explore tool into @vt-pi/agent-explorer
     │   │   ├── fix-ci/         # push_and_check_ci tool
     │   │   ├── folder-protector/ # Blocks write/edit on protected folders (e.g. .git/)
     │   │   ├── git-commit/     # git_commit tool
@@ -128,6 +140,7 @@ vt-pi/
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts
     │   └── skills/              # Skill definitions (populated at build time)
+    ├── agent-explorer/          # Read-only exploration sub-agent (in-process SDK session)
     └── command-policy/          # Shell command allow-list engine
 ```
 

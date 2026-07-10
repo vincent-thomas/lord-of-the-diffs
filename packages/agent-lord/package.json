@@ -7,6 +7,7 @@
 		"test": "node --test"
 	},
 	"dependencies": {
+		"@vt-pi/agent-explorer": "*",
 		"@vt-pi/command-policy": "*"
 	}
 }
