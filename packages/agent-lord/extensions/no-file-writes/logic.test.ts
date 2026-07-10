@@ -69,6 +69,9 @@ const shouldPass = [
 	"echo hi >/dev/null",
 	"echo hi >>/dev/null",
 	"cmd >&1",
+	// Quoting an excluded target doesn't change what it resolves to.
+	'echo hi > "/dev/null"',
+	"echo hi > '/dev/null'",
 	"grep pattern files",
 	"echo concatenate things",
 	"which printf",
