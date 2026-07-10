@@ -18,7 +18,7 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	// Checked before any other entry (first match wins in evaluateCommand) so
 	// a command that would otherwise be allowed (cp, mv, rm, mkdir, …) is
 	// still blocked when its args target a protected folder — shared with the
-	// folder-protector extension's write/edit checks via pi/lib/folder-guard.ts.
+	// folder-protector extension's write/edit checks via ../../lib/folder-guard.ts.
 	{
 		name: "protected folder",
 		status: CommandPolicyStatus.Banned,
