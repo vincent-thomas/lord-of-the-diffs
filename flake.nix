@@ -267,26 +267,43 @@
             pkgs.git
           ];
 
-          # No build step for these workspace members — just install deps.
           # pnpmConfigHook's `pnpm install` already passes --ignore-scripts,
           # avoiding native compilation for transitive deps (e.g. photon-node),
           # same reasoning as piBase above.
           #
-          # dontBuild skips stdenv's generic buildPhase outright, so it never
-          # notices this repo's own root Makefile (copied in via `src = ./.`)
-          # and runs `make` (which runs `nix build`, recursively — not
-          # available inside this derivation's sandbox).
-          dontBuild = true;
-
-          # Run the workspace test suite here, where the repo's real
-          # layout (root package.json + packages/*) and freshly
-          # installed node_modules already match up — no copying needed.
+          # Override buildPhase outright rather than leaving stdenv's generic
+          # one in place, which would notice this repo's own root Makefile
+          # (copied in via `src = ./.`) and run `make` — which runs `nix
+          # build`, recursively, not available inside this derivation's
+          # sandbox.
+          #
+          # @vt-pi/command-policy, @vt-pi/agent-explorer, and
+          # @vt-pi/agent-advisor are plain, build-step-free TypeScript
+          # everywhere *except* here: Node refuses to type-strip a .ts file
+          # whose real path resolves under any node_modules directory, and
+          # `pnpm deploy` (installPhase, below) always materializes workspace
+          # dependencies through its node_modules/.pnpm store. Compile them to
+          # plain .js here so the deployed tree has no raw .ts sitting inside
+          # node_modules — and so agent-lord's own tests below, which import
+          # @vt-pi/command-policy's runtime CommandPolicyStatus by package
+          # name, resolve real files instead of failing outright (buildPhase
+          # runs before checkPhase; the reverse order 404s on dist/index.js).
+          #
           # --reporter=append-only: pnpm's default reporter redraws its
           # progress tree in place via cursor control, which only works
           # attached to a real TTY. Nix's build sandbox has none, so without
           # this every redraw frame gets captured as its own log line —
-          # burying whatever a failing `node --test` actually printed under
-          # a wall of near-blank lines.
+          # burying whatever a failing command actually printed under a wall
+          # of near-blank lines.
+          buildPhase = ''
+            runHook preBuild
+            pnpm --reporter=append-only -r run build
+            runHook postBuild
+          '';
+
+          # Run the workspace test suite here, where the repo's real
+          # layout (root package.json + packages/*) and freshly
+          # installed node_modules already match up — no copying needed.
           doCheck = true;
           checkPhase = ''
             runHook preCheck
@@ -297,16 +314,6 @@
           installPhase = ''
             runHook preInstall
             mkdir -p $out
-
-            # @vt-pi/command-policy, @vt-pi/agent-explorer, and
-            # @vt-pi/agent-advisor are plain, build-step-free TypeScript
-            # everywhere *except* here: Node refuses to type-strip a .ts
-            # file whose real path resolves under any node_modules
-            # directory, and `pnpm deploy` (below) always materializes
-            # workspace dependencies through its node_modules/.pnpm store.
-            # Compile them to plain .js first so the deployed tree has no
-            # raw .ts sitting inside node_modules.
-            pnpm --reporter=append-only -r run build
 
             # Deploy @vt-pi/agent-lord as a self-contained tree: its own
             # extensions/lib/skills/AGENTS.md alongside a node_modules
