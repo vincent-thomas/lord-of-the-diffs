@@ -317,20 +317,21 @@
               cp ${./packages/agent-lord/AGENTS.md} $out/AGENTS.md
 
               # Real npm deps (@mariozechner/pi-coding-agent, …) from
-              # workspaceDeps. Its @vt-pi/command-policy and @vt-pi/agent-explorer
-              # entries were dereferenced from a differently-shaped tree (this
-              # repo's own packages/* layout) so they don't match this
-              # derivation's flattened $out/{lib,extensions,packages}; replace
-              # them with symlinks that do. Same story for @vt-pi/agent-lord —
-              # nothing resolves it by package name (lib/ and extensions/* use
-              # relative imports), so it's simply dropped rather than
-              # relinked.
+              # workspaceDeps. Its @vt-pi/command-policy, @vt-pi/agent-explorer,
+              # and @vt-pi/agent-advisor entries were dereferenced from a
+              # differently-shaped tree (this repo's own packages/* layout) so
+              # they don't match this derivation's flattened
+              # $out/{lib,extensions,packages}; replace them with symlinks
+              # that do. Same story for @vt-pi/agent-lord — nothing resolves
+              # it by package name (lib/ and extensions/* use relative
+              # imports), so it's simply dropped rather than relinked.
               cp -r ${workspaceDeps}/node_modules $out/node_modules
               chmod -R u+w $out/node_modules
               rm -rf $out/node_modules/@vt-pi
               mkdir -p $out/node_modules/@vt-pi
               ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
               ln -s ../../packages/agent-explorer $out/node_modules/@vt-pi/agent-explorer
+              ln -s ../../packages/agent-advisor $out/node_modules/@vt-pi/agent-advisor
             '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
