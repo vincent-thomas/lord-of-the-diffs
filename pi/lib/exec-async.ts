@@ -15,6 +15,15 @@ interface ExecResult {
 	stderr: string;
 }
 
+// node:child_process.exec defaults maxBuffer to 1MB per stream (stdout,
+// stderr checked separately) and kills the child if either is exceeded —
+// not truncates, kills, so the caller gets nothing at all. Several callers
+// legitimately produce more than that: `gh run view --log` on a verbose CI
+// run, or `gh api --paginate` against a PR with many check runs. Raised well
+// above any of this codebase's real payloads while still bounding a runaway
+// process.
+const DEFAULT_MAX_BUFFER = 50 * 1024 * 1024;
+
 /** An exec failure, with stdout/stderr attached so callers can show what the command actually printed. */
 interface ExecError extends Error {
 	stdout: string;
@@ -27,7 +36,7 @@ interface ExecError extends Error {
  */
 export function execAsync(
 	command: string,
-	options: { cwd?: string; timeout?: number; signal?: AbortSignal },
+	options: { cwd?: string; timeout?: number; signal?: AbortSignal; maxBuffer?: number },
 ): Promise<ExecResult> {
 	if (options.signal?.aborted) {
 		return Promise.reject(
@@ -51,7 +60,11 @@ export function execAsync(
 
 		child = exec(
 			command,
-			{ cwd: options.cwd, timeout: options.timeout },
+			{
+				cwd: options.cwd,
+				timeout: options.timeout,
+				maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER,
+			},
 			(err, stdout, stderr) => {
 				cleanup();
 				if (err) {
