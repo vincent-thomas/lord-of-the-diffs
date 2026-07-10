@@ -39,7 +39,6 @@ vt-pi/
     │   ├── sandbox/           # /sandbox command for read-only mode
     │   └── write-guard/       # Blocks write on existing files > 50 lines
     ├── lib/                   # Pure logic shared across extensions
-    │   ├── command-utils.ts
     │   ├── exec-async.ts
     │   ├── folder-guard.ts
     │   ├── git-utils.ts
@@ -109,11 +108,11 @@ A package that needs a real external dependency (e.g.
 `@mariozechner/pi-coding-agent`, which `createCommandPolicyExtension` needs
 for `ExtensionAPI`/`isToolCallEventType`) just declares it normally in that
 package's `package.json` `dependencies` — same as any npm package. `pi/lib/`
-still must not depend on any `@vt-pi/*` workspace package or on Pi; if a
-package needs something `pi/lib/` also has (e.g. the shell-parsing helpers
-in `command-utils.ts`), duplicate that code into the package rather than
-importing it — see `packages/command-policy/command-utils.ts`, a deliberate
-copy of `pi/lib/command-utils.ts`'s parsing logic.
+still must not depend on any `@vt-pi/*` workspace package or on Pi; a
+package that needs logic resembling something in `pi/lib/` keeps its own
+self-contained copy inside the package (see
+`packages/command-policy/command-utils.ts`) rather than importing across
+that boundary.
 
 `flake.nix`'s `workspaceDeps` derivation runs a real, hash-pinned `npm
 install` against the root workspace (same `buildNpmPackage` + `npmDepsHash`

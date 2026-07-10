@@ -69,9 +69,9 @@ function extractPathArg(commandName: string, arg: string): string | null {
 
 /**
  * Check a single resolved command invocation (name + args — the shape
- * shared by command-utils' commandInvocation and @vt-pi/command-policy's
- * CommandUse) for a path targeting a banned folder. Returns the offending
- * path, or null if this invocation doesn't touch one.
+ * shared by @vt-pi/command-policy's commandInvocation and CommandUse) for a
+ * path targeting a banned folder. Returns the offending path, or null if
+ * this invocation doesn't touch one.
  */
 export function findBannedFolderPath(
 	use: { name: string; args: string[] },

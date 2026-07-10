@@ -123,7 +123,6 @@ vt-pi/
     │   ├── sandbox/           # /sandbox read-only mode
     │   └── write-guard/       # Blocks write on large/guarded files
     ├── lib/                   # Pure logic, no Pi SDK imports
-    │   ├── command-utils.ts
     │   ├── exec-async.ts
     │   ├── folder-guard.ts
     │   ├── git-utils.ts
