@@ -7,8 +7,8 @@
 		"test": "node --test"
 	},
 	"dependencies": {
-		"@vt-pi/agent-advisor": "*",
-		"@vt-pi/agent-explorer": "*",
-		"@vt-pi/command-policy": "*"
+		"@vt-pi/agent-advisor": "workspace:*",
+		"@vt-pi/agent-explorer": "workspace:*",
+		"@vt-pi/command-policy": "workspace:*"
 	}
 }

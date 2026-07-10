@@ -22,10 +22,11 @@ vt-pi/
 ├── flake.nix                  # The build — all packaging logic lives here
 ├── flake.lock
 ├── Makefile                   # Defines what "valid" means for pre-checks
-├── package.json               # Root npm workspace (packages/*)
-└── packages/                  # Standalone @vt-pi/* npm packages
+├── package.json               # Root pnpm workspace
+├── pnpm-workspace.yaml         # Declares packages/* as workspace members
+└── packages/                  # Standalone @vt-pi/* pnpm packages
     ├── agent-lord/             # Everything that gets bundled into the package — a single
-    │   │                       # npm workspace member (@vt-pi/agent-lord) covering both lib/
+    │   │                       # pnpm workspace member (@vt-pi/agent-lord) covering both lib/
     │   │                       # and extensions/*; they reference each other with relative imports
     │   ├── AGENTS.md           # System prompt shipped with the binary
     │   ├── extensions/         # One subdirectory per extension
@@ -58,18 +59,21 @@ Pi `ExtensionAPI`. Extensions use three main APIs:
 
 The `packages/agent-lord/lib/` directory holds shared code, imported via relative paths (e.g.
 `../../lib/git-utils.ts`) since `lib/` and `extensions/*` are part of
-the same npm workspace member (`@vt-pi/agent-lord`, `packages/agent-lord/package.json`). **No Pi
+the same pnpm workspace member (`@vt-pi/agent-lord`, `packages/agent-lord/package.json`). **No Pi
 imports allowed in lib/** — it must stay pure TypeScript so it can be
 imported from any extension's logic module. Extensions should keep Pi
 imports in `index.ts` and put testable logic in their own `logic.ts`.
 
-## npm workspaces and packages/
+## pnpm workspaces and packages/
 
-The repo is an npm workspace (root `package.json`'s `workspaces` field covers
-every `packages/*`, including `packages/agent-lord` — one member for the
-whole lib+extensions tree). Workspace members are plain TypeScript with no
-build step — Node's native type-stripping runs `.ts` files directly, both in
-`nix build` and via `node --test`.
+The repo is a pnpm workspace (`pnpm-workspace.yaml` covers every `packages/*`,
+including `packages/agent-lord` — one member for the whole lib+extensions
+tree). Workspace-local dependencies (e.g. `@vt-pi/agent-lord`'s dependency on
+`@vt-pi/command-policy`) are declared with the `workspace:*` protocol so pnpm
+links them locally instead of trying to fetch them from the registry.
+Workspace members are plain TypeScript with no build step — Node's native
+type-stripping runs `.ts` files directly, both in `nix build` and via `node
+--test`.
 
 `packages/agent-lord/lib/` is for logic shared across *this repo's*
 extensions, referenced by relative import since it's in the same workspace
@@ -117,20 +121,23 @@ package or on Pi; a package that needs logic resembling something in
 package (see `packages/command-policy/command-utils.ts`) rather than
 importing across that boundary.
 
-`flake.nix`'s `workspaceDeps` derivation runs a real, hash-pinned `npm
-install` against the root workspace (same `buildNpmPackage` + `npmDepsHash`
-pattern `piBase` uses for its own deps) to resolve real external
-dependencies declared by any workspace package. `piCustomizations` copies
-that `node_modules`, then replaces the `@vt-pi/*` entries (which
-`workspaceDeps` dereferenced from its own copy of the repo, at a different
-directory shape) with symlinks matching `piCustomizations`'s own flattened
-`$out/{lib,extensions,packages}` layout — today that's just
+`flake.nix`'s `workspaceDeps` derivation runs a real, hash-pinned `pnpm
+install` against the root workspace (`fetchPnpmDeps` + `pnpmConfigHook`,
+mirroring the `buildNpmPackage` + `npmDepsHash` pattern `piBase` uses for its
+own deps) to resolve real external dependencies declared by any workspace
+package. The root `.npmrc`'s `shamefully-hoist=true` makes pnpm flatten
+`node_modules` npm-style, including symlinking `@vt-pi/*` workspace members
+into it, instead of pnpm's normal per-package `node_modules` layout.
+`piCustomizations` copies that `node_modules`, then replaces the `@vt-pi/*`
+entries (which `workspaceDeps` dereferenced from its own copy of the repo, at
+a different directory shape) with symlinks matching `piCustomizations`'s own
+flattened `$out/{lib,extensions,packages}` layout — today that's just
 `@vt-pi/command-policy`, since nothing resolves `@vt-pi/agent-lord` by
 package name (its own `lib/` and `extensions/*` use relative imports). The
 final `pi` derivation reuses `piCustomizations`'s already-assembled
 `node_modules` as-is. Adding a new `packages/*` package requires a matching
 `ln -s` line in `piCustomizations`; adding a package with a new external
-dependency just needs `npmDepsHash` regenerated (`nix build 2>&1 | awk
+dependency just needs the `pnpmDeps` hash regenerated (`nix build 2>&1 | awk
 '/got:/{print $2}'`).
 
 ## Test files

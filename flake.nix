@@ -23,6 +23,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         lib = pkgs.lib;
         nodejs = pkgs.nodejs_24;
+        pnpm = pkgs.pnpm_10;
 
         # ── Token generator for GitHub App auth ──────────────────────────────
         # Reads LOTD_CONFIG_FILE, builds a JWT, exchanges for installation token.
@@ -238,56 +239,61 @@
           };
         };
 
-        # ── npm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
-        # ── plus the @vt-pi/* workspace links npm sets up automatically) ──────
-        workspaceDeps = pkgs.buildNpmPackage {
+        # ── pnpm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
+        # ── plus the @vt-pi/* workspace links pnpm sets up via shamefully-hoist) ──
+        workspaceDeps = pkgs.stdenv.mkDerivation {
           pname = "vt-pi-workspace-deps";
           version = "0.0.0";
 
           src = ./.;
 
-          # Hash covers all npm deps declared in the root package-lock.json.
+          # Hash covers all pnpm deps declared in the root pnpm-lock.yaml.
           # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
-          npmDepsHash = "sha256-Udv4wvgayF7oqsxAef+jMvGoAvbVDhGFB5Si3H0EEU4=";
-
-          inherit nodejs;
+          pnpmDeps = pkgs.fetchPnpmDeps {
+            pname = "vt-pi-workspace-deps";
+            version = "0.0.0";
+            src = ./.;
+            inherit pnpm;
+            fetcherVersion = 4;
+            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          };
 
           # git is needed on PATH for the checkPhase below — several tests
           # (git-commit, fix-ci) shell out to a real `git` binary.
-          nativeBuildInputs = [ pkgs.git ];
+          nativeBuildInputs = [
+            nodejs
+            pnpm
+            pkgs.pnpmConfigHook
+            pkgs.git
+          ];
 
           # No build step for these workspace members — just install deps.
-          # --ignore-scripts avoids native compilation for transitive deps
-          # (e.g. photon-node), same reasoning as piBase above.
-          dontNpmBuild = true;
-          npmFlags = [ "--ignore-scripts" ];
-
-          # dontNpmBuild only skips buildNpmPackage's own "npm run build"
-          # step — it doesn't stop stdenv's generic buildPhase from noticing
-          # this repo's own root Makefile (copied in via `src = ./.`) and
-          # running `make` (which runs `nix build`, recursively — not
-          # available inside this derivation's sandbox). Override buildPhase
-          # outright so nothing auto-detects it.
-          buildPhase = ''
-            runHook preBuild
-            runHook postBuild
-          '';
+          # pnpmConfigHook's `pnpm install` already passes --ignore-scripts,
+          # avoiding native compilation for transitive deps (e.g. photon-node),
+          # same reasoning as piBase above.
+          #
+          # dontBuild skips stdenv's generic buildPhase outright, so it never
+          # notices this repo's own root Makefile (copied in via `src = ./.`)
+          # and runs `make` (which runs `nix build`, recursively — not
+          # available inside this derivation's sandbox).
+          dontBuild = true;
 
           # Run the workspace test suite here, where the repo's real
-          # layout (root package.json + pi/ + packages/*) and freshly
+          # layout (root package.json + packages/*) and freshly
           # installed node_modules already match up — no copying needed.
           doCheck = true;
           checkPhase = ''
             runHook preCheck
-            npm test --workspaces --if-present
+            pnpm -r test
             runHook postCheck
           '';
 
           installPhase = ''
             runHook preInstall
             mkdir -p $out
-            # -L dereferences the @vt-pi/* workspace symlinks npm creates so
-            # this derivation's node_modules is fully self-contained — no
+            # -L dereferences the @vt-pi/* workspace symlinks (and the
+            # .pnpm store symlinks backing everything else) so this
+            # derivation's node_modules is fully self-contained — no
             # dangling symlinks back into this build's own (different) tree.
             cp -rL node_modules $out/
             runHook postInstall
@@ -316,7 +322,7 @@
               cp -r ${./packages/agent-lord/skills}/. $out/skills/
               cp ${./packages/agent-lord/AGENTS.md} $out/AGENTS.md
 
-              # Real npm deps (@mariozechner/pi-coding-agent, …) from
+              # Real deps (@mariozechner/pi-coding-agent, …) from
               # workspaceDeps. Its @vt-pi/command-policy, @vt-pi/agent-explorer,
               # and @vt-pi/agent-advisor entries were dereferenced from a
               # differently-shaped tree (this repo's own packages/* layout) so
