@@ -305,7 +305,7 @@ function findMatchingParen(segment: string, start: number): number {
  * otherwise have to reason about what it actually resolves to.
  */
 export const OBFUSCATED = "obfuscated" as const;
-export type ObfuscatedCommand = typeof OBFUSCATED;
+type ObfuscatedCommand = typeof OBFUSCATED;
 
 // Characters that mean the shell actually needed some form of
 // quoting/escaping to deliver this literal value — whitespace and shell
@@ -386,7 +386,7 @@ function isAliasBustingBackslash(tok: string): boolean {
  * returns false for them; only a command/flag word with no such content
  * can be "pointlessly" escaped.
  */
-export function isPointlessEscaping(tok: string): boolean {
+function isPointlessEscaping(tok: string): boolean {
 	if (isAliasBustingBackslash(tok)) return false;
 	return resolvePointlessEscaping(tok) !== null;
 }
@@ -414,12 +414,12 @@ function resolvePointlessEscaping(tok: string): string | null {
  * does not apply here — there's no legitimate reason to backslash-escape a
  * flag, leading or otherwise.
  */
-export function isDisguisedFlag(tok: string): boolean {
+function isDisguisedFlag(tok: string): boolean {
 	return resolvePointlessEscaping(tok)?.startsWith("-") ?? false;
 }
 
 /** True if any arg in `args` is a flag disguised via quoting/escaping (see {@link isDisguisedFlag}). */
-export function hasDisguisedFlag(args: string[]): boolean {
+function hasDisguisedFlag(args: string[]): boolean {
 	return args.some(isDisguisedFlag);
 }
 
@@ -472,35 +472,3 @@ export function commandInvocation(segment: string): { name: string; args: string
 	return null;
 }
 
-/**
- * Return the executable name (lowercased basename) that a single command
- * segment invokes. Returns null when the segment runs nothing, or when the
- * invocation is obfuscated (see {@link OBFUSCATED}) — callers that need to
- * fail closed on obfuscation should call {@link commandInvocation} directly.
- */
-export function leadingCommand(segment: string): string | null {
-	const inv = commandInvocation(segment);
-	return inv && inv !== OBFUSCATED ? inv.name : null;
-}
-
-/**
- * Scan a shell command string for any invocation matching `match` (either a
- * set of command names or a predicate). Returns the matched command name and
- * the offending segment, or null. Obfuscated invocations always match —
- * this scans specifically for dangerous commands, so a segment we can't
- * confidently resolve is treated as a potential hit rather than skipped.
- */
-export function findCommandUse(
-	text: string,
-	match: ReadonlySet<string> | ((cmd: string) => boolean),
-): { name: string; segment: string } | null {
-	const test = typeof match === "function" ? match : (c: string) => match.has(c);
-	for (const seg of splitCommandSegments(text)) {
-		const inv = commandInvocation(seg);
-		if (inv === OBFUSCATED) return { name: OBFUSCATED, segment: seg.trim() };
-		if (inv && test(inv.name)) {
-			return { name: inv.name, segment: seg.trim() };
-		}
-	}
-	return null;
-}

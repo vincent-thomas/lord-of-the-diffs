@@ -15,7 +15,7 @@ import { execAsync, extractErrorOutput } from "./exec-async.ts";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface PreCheckResult {
+interface PreCheckResult {
 	passed: boolean;
 	steps: { command: string; passed: boolean; output: string; elapsed?: string }[];
 }
