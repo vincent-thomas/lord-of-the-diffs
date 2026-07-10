@@ -255,7 +255,7 @@
             src = ./.;
             inherit pnpm;
             fetcherVersion = 4;
-            hash = "sha256-wdXVU2UZP3b0eAr+a/cxZFMSzbJIKQX3vZSEthiLrZQ=";
+            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
           };
 
           # git is needed on PATH for the checkPhase below — several tests
@@ -291,54 +291,37 @@
           installPhase = ''
             runHook preInstall
             mkdir -p $out
-            # -L dereferences the @vt-pi/* workspace symlinks (and the
-            # .pnpm store symlinks backing everything else) so this
-            # derivation's node_modules is fully self-contained — no
-            # dangling symlinks back into this build's own (different) tree.
-            cp -rL node_modules $out/
+
+            # @vt-pi/command-policy, @vt-pi/agent-explorer, and
+            # @vt-pi/agent-advisor are plain, build-step-free TypeScript
+            # everywhere *except* here: Node refuses to type-strip a .ts
+            # file whose real path resolves under any node_modules
+            # directory, and `pnpm deploy` (below) always materializes
+            # workspace dependencies through its node_modules/.pnpm store.
+            # Compile them to plain .js first so the deployed tree has no
+            # raw .ts sitting inside node_modules.
+            pnpm -r run build
+
+            # Deploy @vt-pi/agent-lord as a self-contained tree: its own
+            # extensions/lib/skills/AGENTS.md alongside a node_modules
+            # where every @vt-pi/* dependency (and all real deps like
+            # @mariozechner/pi-coding-agent) are fully materialized —
+            # no symlinks back into this build's own (different) tree.
+            pnpm --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
+
             runHook postInstall
           '';
         };
 
         # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
+        # workspaceDeps already deployed @vt-pi/agent-lord as a self-contained
+        # tree (extensions/lib/skills/AGENTS.md + a node_modules with every
+        # @vt-pi/* and real dependency fully materialized) — just copy it.
         piCustomizations =
-          pkgs.runCommand "pi-customizations"
-            {
-              nativeBuildInputs = [
-                nodejs
-                pkgs.git
-              ];
-            }
-            ''
-              mkdir -p $out/extensions $out/lib $out/skills $out/packages
-
-              # Copy extensions + lib + packages so ../lib/ imports and
-              # @vt-pi/command-policy imports both work
-              cp -r ${./packages/agent-lord/extensions}/. $out/extensions/
-              cp -r ${./packages/agent-lord/lib}/. $out/lib/
-              cp -r ${./packages}/. $out/packages/
-
-              # Copy skills, AGENTS.md, and bin scripts
-              cp -r ${./packages/agent-lord/skills}/. $out/skills/
-              cp ${./packages/agent-lord/AGENTS.md} $out/AGENTS.md
-
-              # Real deps (@mariozechner/pi-coding-agent, …) from
-              # workspaceDeps. Its @vt-pi/command-policy, @vt-pi/agent-explorer,
-              # and @vt-pi/agent-advisor entries were dereferenced from a
-              # differently-shaped tree (this repo's own packages/* layout) so
-              # they don't match this derivation's flattened
-              # $out/{lib,extensions,packages}; replace them with symlinks
-              # that do. Same story for @vt-pi/agent-lord — nothing resolves
-              # it by package name (lib/ and extensions/* use relative
-              # imports), so it's simply dropped rather than relinked.
-              cp -r ${workspaceDeps}/node_modules $out/node_modules
-              chmod -R u+w $out/node_modules
-              rm -rf $out/node_modules/@vt-pi
-              mkdir -p $out/node_modules/@vt-pi
-              ln -s ../../packages/command-policy $out/node_modules/@vt-pi/command-policy
-              ln -s ../../packages/agent-explorer $out/node_modules/@vt-pi/agent-explorer
-              ln -s ../../packages/agent-advisor $out/node_modules/@vt-pi/agent-advisor
-            '';
+          pkgs.runCommand "pi-customizations" { } ''
+            cp -r ${workspaceDeps}/agent-lord $out
+            chmod -R u+w $out
+          '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
         pi =
@@ -361,11 +344,10 @@
               mkdir -p $out/share/pi
               cp -r ${piCustomizations}/extensions $out/share/pi/extensions
               cp -r ${piCustomizations}/lib $out/share/pi/lib
-              cp -r ${piCustomizations}/packages $out/share/pi/packages
               cp -r ${piCustomizations}/skills $out/share/pi/skills
               cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
 
-              # Same node_modules (real deps + @vt-pi/* workspace symlinks) as
+              # Same node_modules (real deps + @vt-pi/* deployed packages) as
               # piCustomizations, so extensions can resolve them at runtime too.
               cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
               chmod -R u+w $out/share/pi/node_modules

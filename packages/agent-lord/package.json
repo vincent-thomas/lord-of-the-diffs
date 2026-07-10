@@ -7,6 +7,7 @@
 		"test": "node --test"
 	},
 	"dependencies": {
+		"@mariozechner/pi-coding-agent": "^0.73.1",
 		"@vt-pi/agent-advisor": "workspace:*",
 		"@vt-pi/agent-explorer": "workspace:*",
 		"@vt-pi/command-policy": "workspace:*"
