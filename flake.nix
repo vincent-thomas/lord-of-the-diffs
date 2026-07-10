@@ -281,10 +281,16 @@
           # Run the workspace test suite here, where the repo's real
           # layout (root package.json + packages/*) and freshly
           # installed node_modules already match up — no copying needed.
+          # --reporter=append-only: pnpm's default reporter redraws its
+          # progress tree in place via cursor control, which only works
+          # attached to a real TTY. Nix's build sandbox has none, so without
+          # this every redraw frame gets captured as its own log line —
+          # burying whatever a failing `node --test` actually printed under
+          # a wall of near-blank lines.
           doCheck = true;
           checkPhase = ''
             runHook preCheck
-            pnpm -r test
+            pnpm --reporter=append-only -r test
             runHook postCheck
           '';
 
@@ -300,14 +306,14 @@
             # workspace dependencies through its node_modules/.pnpm store.
             # Compile them to plain .js first so the deployed tree has no
             # raw .ts sitting inside node_modules.
-            pnpm -r run build
+            pnpm --reporter=append-only -r run build
 
             # Deploy @vt-pi/agent-lord as a self-contained tree: its own
             # extensions/lib/skills/AGENTS.md alongside a node_modules
             # where every @vt-pi/* dependency (and all real deps like
             # @mariozechner/pi-coding-agent) are fully materialized —
             # no symlinks back into this build's own (different) tree.
-            pnpm --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
 
             runHook postInstall
           '';
