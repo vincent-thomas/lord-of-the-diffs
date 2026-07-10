@@ -8,7 +8,7 @@
 export const MAX_LINES = 50;
 
 /** Name of the Makefile (case-insensitive match target). */
-export const MAKEFILE_NAME = "makefile";
+const MAKEFILE_NAME = "makefile";
 
 /** Returns the base filename from a path string. */
 export function baseName(p: string): string {

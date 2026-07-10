@@ -10,13 +10,13 @@
 
 import { exec, type ChildProcess } from "node:child_process";
 
-export interface ExecResult {
+interface ExecResult {
 	stdout: string;
 	stderr: string;
 }
 
 /** An exec failure, with stdout/stderr attached so callers can show what the command actually printed. */
-export interface ExecError extends Error {
+interface ExecError extends Error {
 	stdout: string;
 	stderr: string;
 }

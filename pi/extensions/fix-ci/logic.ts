@@ -22,13 +22,13 @@ export interface CheckResult {
 	link: string | null;
 }
 
-export interface PollResult {
+interface PollResult {
 	checks: CheckResult[];
 	timedOut: boolean;
 	polls: number;
 }
 
-export interface PollTarget {
+interface PollTarget {
 	sha: string;
 	mode: string;
 }
@@ -40,12 +40,12 @@ export interface FailureLog {
 	log: string | null;
 }
 
-export interface PushResult {
+interface PushResult {
 	success: boolean;
 	output: string;
 }
 
-export interface MergeResult {
+interface MergeResult {
 	success: boolean;
 	output: string;
 	conflictPaths: string[];
@@ -237,7 +237,7 @@ export function allSuitesComplete(suiteStatuses: string[]): boolean {
 	return suiteStatuses.every((s) => s === "completed");
 }
 
-export async function resolvePollTarget(
+async function resolvePollTarget(
 	cwd: string,
 	signal?: AbortSignal,
 	pushedSha?: string,
@@ -527,7 +527,7 @@ export async function getPrBaseBranch(
  * Get the latest commit SHA of a branch via the GitHub API.
  * Returns null on failure.
  */
-export async function getBranchShaViaApi(
+async function getBranchShaViaApi(
 	cwd: string,
 	branch: string,
 	signal?: AbortSignal,
@@ -638,7 +638,7 @@ export async function mergeBaseBranchIntoCurrent(
 /**
  * Parse git merge output to extract paths of files with conflicts.
  */
-export function extractConflictPaths(output: string): string[] {
+function extractConflictPaths(output: string): string[] {
 	const paths: string[] = [];
 	const regex = /CONFLICT\s+\([^)]+\):\s+Merge conflict in\s+(\S+)/g;
 	let match;
@@ -928,7 +928,7 @@ export async function addReviewers(
 // Review types
 // ---------------------------------------------------------------------------
 
-export interface Review {
+interface Review {
 	id: number;
 	author: string;
 	state: string; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING
@@ -937,7 +937,7 @@ export interface Review {
 	commitId: string | null; // SHA the review was submitted against; null if unknown
 }
 
-export interface ReviewComment {
+interface ReviewComment {
 	id: number;
 	pullRequestReviewId: number;
 	path: string;

@@ -155,7 +155,7 @@ function hasHereDoc(text: string): boolean {
 	return false;
 }
 
-export interface CommandPolicyViolation {
+interface CommandPolicyViolation {
 	/** Short message suitable for a UI toast/notification. */
 	notify: string;
 	/** Full explanation returned to the agent as the blocked tool call's reason. */

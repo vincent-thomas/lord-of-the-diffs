@@ -305,7 +305,7 @@ function findMatchingParen(segment: string, start: number): number {
  * otherwise have to reason about what it actually resolves to.
  */
 export const OBFUSCATED = "obfuscated" as const;
-export type ObfuscatedCommand = typeof OBFUSCATED;
+type ObfuscatedCommand = typeof OBFUSCATED;
 
 // Characters that mean the shell actually needed some form of
 // quoting/escaping to deliver this literal value — whitespace and shell
@@ -386,7 +386,7 @@ function isAliasBustingBackslash(tok: string): boolean {
  * returns false for them; only a command/flag word with no such content
  * can be "pointlessly" escaped.
  */
-export function isPointlessEscaping(tok: string): boolean {
+function isPointlessEscaping(tok: string): boolean {
 	if (isAliasBustingBackslash(tok)) return false;
 	return resolvePointlessEscaping(tok) !== null;
 }
@@ -414,12 +414,12 @@ function resolvePointlessEscaping(tok: string): string | null {
  * does not apply here — there's no legitimate reason to backslash-escape a
  * flag, leading or otherwise.
  */
-export function isDisguisedFlag(tok: string): boolean {
+function isDisguisedFlag(tok: string): boolean {
 	return resolvePointlessEscaping(tok)?.startsWith("-") ?? false;
 }
 
 /** True if any arg in `args` is a flag disguised via quoting/escaping (see {@link isDisguisedFlag}). */
-export function hasDisguisedFlag(args: string[]): boolean {
+function hasDisguisedFlag(args: string[]): boolean {
 	return args.some(isDisguisedFlag);
 }
 

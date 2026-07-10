@@ -39,14 +39,14 @@ type CommandPolicyEntryBase = {
 	description?: string;
 };
 
-export type BannedCommandPolicyEntry = CommandPolicyEntryBase & {
+type BannedCommandPolicyEntry = CommandPolicyEntryBase & {
 	status: typeof CommandPolicyStatus.Banned;
 	bannedFlags?: never;
 	allowedFlags?: never;
 	validate?: never;
 };
 
-export type AllowedCommandPolicyEntry = CommandPolicyEntryBase & {
+type AllowedCommandPolicyEntry = CommandPolicyEntryBase & {
 	status: typeof CommandPolicyStatus.Allowed;
 	/** Flags that are forbidden when this entry matches. Mutually exclusive with allowedFlags. */
 	bannedFlags?: string[];
@@ -55,7 +55,7 @@ export type AllowedCommandPolicyEntry = CommandPolicyEntryBase & {
 	validate?: (use: CommandUse) => string | null;
 };
 
-export type AllowedCommandPolicyEntryWithAllowedFlags = CommandPolicyEntryBase & {
+type AllowedCommandPolicyEntryWithAllowedFlags = CommandPolicyEntryBase & {
 	status: typeof CommandPolicyStatus.Allowed;
 	bannedFlags?: never;
 	/** The only flags allowed when this entry matches. Mutually exclusive with bannedFlags. */
