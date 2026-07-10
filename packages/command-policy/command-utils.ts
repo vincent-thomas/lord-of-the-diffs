@@ -472,35 +472,3 @@ export function commandInvocation(segment: string): { name: string; args: string
 	return null;
 }
 
-/**
- * Return the executable name (lowercased basename) that a single command
- * segment invokes. Returns null when the segment runs nothing, or when the
- * invocation is obfuscated (see {@link OBFUSCATED}) — callers that need to
- * fail closed on obfuscation should call {@link commandInvocation} directly.
- */
-export function leadingCommand(segment: string): string | null {
-	const inv = commandInvocation(segment);
-	return inv && inv !== OBFUSCATED ? inv.name : null;
-}
-
-/**
- * Scan a shell command string for any invocation matching `match` (either a
- * set of command names or a predicate). Returns the matched command name and
- * the offending segment, or null. Obfuscated invocations always match —
- * this scans specifically for dangerous commands, so a segment we can't
- * confidently resolve is treated as a potential hit rather than skipped.
- */
-export function findCommandUse(
-	text: string,
-	match: ReadonlySet<string> | ((cmd: string) => boolean),
-): { name: string; segment: string } | null {
-	const test = typeof match === "function" ? match : (c: string) => match.has(c);
-	for (const seg of splitCommandSegments(text)) {
-		const inv = commandInvocation(seg);
-		if (inv === OBFUSCATED) return { name: OBFUSCATED, segment: seg.trim() };
-		if (inv && test(inv.name)) {
-			return { name: inv.name, segment: seg.trim() };
-		}
-	}
-	return null;
-}
