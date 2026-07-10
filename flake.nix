@@ -178,13 +178,13 @@
             # chain means set -e never kills the build). Exit 0 = no vulns
             # at audit_level, 1 = vulns found, 2+ = error (no network).
             audit_exit=0
-            npm audit --audit-level=high --json 2>&1 >/tmp/npm-audit.json || audit_exit=$?
-            if [ -f /tmp/npm-audit.json ] && [ -s /tmp/npm-audit.json ]; then
+            npm audit --audit-level=high --json 2>&1 >"$TMPDIR/npm-audit.json" || audit_exit=$?
+            if [ -f "$TMPDIR/npm-audit.json" ] && [ -s "$TMPDIR/npm-audit.json" ]; then
               if [ "$audit_exit" -eq 0 ]; then
                 echo "npm audit: no high/critical vulnerabilities"
               elif [ "$audit_exit" -eq 1 ]; then
-                HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' /tmp/npm-audit.json)
-                CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' /tmp/npm-audit.json)
+                HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' "$TMPDIR/npm-audit.json")
+                CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' "$TMPDIR/npm-audit.json")
                 echo "⚠  npm audit: $HIGH high, $CRITICAL critical vulnerabilities found"
                 echo ""
                 echo "  Run locally to inspect:  npm audit --audit-level=high"
@@ -197,7 +197,10 @@
             runHook postBuild
           '';
 
-          doCheck = false; # Tests run in workspaceDeps derivation
+          # Skip upstream's own test suite here (this repo's tests, for the
+          # code under packages/, run separately in the workspaceDeps
+          # derivation below — a different test suite for different code).
+          doCheck = false;
 
           installPhase = ''
             runHook preInstall
@@ -353,12 +356,11 @@
               cp -r ${piBase} $out
               chmod -R u+w $out
 
-              # Add customizations to share/pi/
+              # Add customizations to share/pi/ (package.json/pnpm-lock etc.
+              # from piCustomizations' deploy tree are deliberately left out).
               mkdir -p $out/share/pi
-              cp -r ${piCustomizations}/extensions $out/share/pi/extensions
-              cp -r ${piCustomizations}/lib $out/share/pi/lib
-              cp -r ${piCustomizations}/skills $out/share/pi/skills
-              cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+              cp -r ${piCustomizations}/{extensions,lib,skills} $out/share/pi/
+              cp ${piCustomizations}/AGENTS.md $out/share/pi/
 
               # Same node_modules (real deps + @vt-pi/* deployed packages) as
               # piCustomizations, so extensions can resolve them at runtime too.
