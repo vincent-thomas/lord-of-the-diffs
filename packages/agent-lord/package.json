@@ -1,5 +1,5 @@
 {
-	"name": "@vt-pi/pi",
+	"name": "@vt-pi/agent-lord",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",

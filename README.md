@@ -38,13 +38,13 @@ Three design principles:
 
 ## How it works
 
-### System prompt (`pi/AGENTS.md`)
+### System prompt (`packages/agent-lord/AGENTS.md`)
 
 Bundled into the Pi binary and appended to every session. It establishes the
 commit rhythm, edit discipline, and verification habits expected of the agent.
 This is the "soft" layer — advice backed by structural enforcement below.
 
-### Command policy (`pi/extensions/command-policy/`)
+### Command policy (`packages/agent-lord/extensions/command-policy/`)
 
 A whitelist of allowed shell commands. Every bash invocation is checked against
 the policy entries at runtime:
@@ -62,7 +62,7 @@ the policy entries at runtime:
 When a command is blocked, the agent gets a clear message explaining what was
 blocked and what to do instead.
 
-### Git tooling (`pi/extensions/git-commit/`, `pi/extensions/fix-ci/`)
+### Git tooling (`packages/agent-lord/extensions/git-commit/`, `packages/agent-lord/extensions/fix-ci/`)
 
 The raw git commands (`git push`, `git commit`) are blocked in bash. Two tools
 replace them:
@@ -77,7 +77,7 @@ pushing, it rejects dirty working trees (uncommitted changes). It also tries to
 reconcile PR merge conflicts and divergent branches automatically, and stops
 after `MAX_CYCLES` (3) fix attempts.
 
-### Write guard (`pi/extensions/write-guard/`)
+### Write guard (`packages/agent-lord/extensions/write-guard/`)
 
 Blocks the `write` tool from overwriting existing files larger than 50 lines.
 Forces the agent to use `edit` instead, which requires exact text matching and
@@ -85,18 +85,18 @@ can't silently drop content. The Makefile is fully protected — neither `write`
 nor `edit` can modify it. If the Makefile needs to change, the agent must ask
 the user.
 
-### No file writes in bash (`pi/extensions/no-file-writes/`)
+### No file writes in bash (`packages/agent-lord/extensions/no-file-writes/`)
 
 Blocks all shell redirections (`>`, `>>`) to files. The agent must use the
 `write` or `edit` tools instead.
 
-### Sandbox (`pi/extensions/sandbox/`)
+### Sandbox (`packages/agent-lord/extensions/sandbox/`)
 
 A `/sandbox` command that puts the agent in read-only mode. In sandbox mode,
 the write and edit tools are blocked — the agent can only read files and run
 read-only commands.
 
-### Pre-check system (`pi/lib/precheck.ts`)
+### Pre-check system (`packages/agent-lord/lib/precheck.ts`)
 
 Runs `make` before every commit. The project defines what "valid" means
 through its `Makefile` — currently this runs `nix build`, verifying the full
@@ -109,40 +109,40 @@ vt-pi/
 ├── flake.nix                  # Nix build — packages everything
 ├── flake.lock
 ├── Makefile                   # Defines what "valid" means
-├── packages/                  # Standalone @vt-pi/* npm packages
-│   └── command-policy/        # Shell command allow-list engine
-└── pi/
-    ├── AGENTS.md              # System prompt (bundled into binary)
-    ├── extensions/
-    │   ├── command-policy/    # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
-    │   ├── commit-enforcer/   # Nags the agent to commit/push before yielding
-    │   ├── fix-ci/            # push_and_check_ci tool
-    │   ├── folder-protector/  # Blocks write/edit on protected folders (e.g. .git/)
-    │   ├── git-commit/        # git_commit tool
-    │   ├── no-file-writes/    # Blocks >/>> in bash
-    │   ├── sandbox/           # /sandbox read-only mode
-    │   └── write-guard/       # Blocks write on large/guarded files
-    ├── lib/                   # Pure logic, no Pi SDK imports
-    │   ├── exec-async.ts
-    │   ├── folder-guard.ts
-    │   ├── git-utils.ts
-    │   ├── precheck.ts
-    │   └── shell-quote.ts
-    └── skills/                # Skill definitions (populated at build time)
+└── packages/
+    ├── agent-lord/             # Standalone @vt-pi/agent-lord npm package
+    │   ├── AGENTS.md           # System prompt (bundled into binary)
+    │   ├── extensions/
+    │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
+    │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
+    │   │   ├── fix-ci/         # push_and_check_ci tool
+    │   │   ├── folder-protector/ # Blocks write/edit on protected folders (e.g. .git/)
+    │   │   ├── git-commit/     # git_commit tool
+    │   │   ├── no-file-writes/ # Blocks >/>> in bash
+    │   │   ├── sandbox/        # /sandbox read-only mode
+    │   │   └── write-guard/    # Blocks write on large/guarded files
+    │   ├── lib/                # Pure logic, no Pi SDK imports
+    │   │   ├── exec-async.ts
+    │   │   ├── folder-guard.ts
+    │   │   ├── git-utils.ts
+    │   │   ├── precheck.ts
+    │   │   └── shell-quote.ts
+    │   └── skills/              # Skill definitions (populated at build time)
+    └── command-policy/          # Shell command allow-list engine
 ```
 
 ## Adding an extension
 
-1. Create `pi/extensions/<name>/index.ts` (and `logic.ts` for testable logic)
+1. Create `packages/agent-lord/extensions/<name>/index.ts` (and `logic.ts` for testable logic)
 2. Import from `../../lib/` for shared helpers
 3. Add a `logic.test.ts` alongside your logic — tests run on `nix build`
 4. The flake auto-discovers and registers new extensions — no manual step
 
 ## Adding a skill
 
-1. Create `pi/skills/<name>/SKILL.md` with frontmatter (`name`, `description`)
-   and markdown body
-2. Add it with `git add pi/skills/<name>/` (the flake discovers tracked skills)
+1. Create `packages/agent-lord/skills/<name>/SKILL.md` with frontmatter
+   (`name`, `description`) and markdown body
+2. Add it with `git add packages/agent-lord/skills/<name>/` (the flake discovers tracked skills)
 3. The agent sees it in the `<available_skills>` block of the system prompt
 
 ## Building

@@ -3,12 +3,12 @@
  *
  * Blocks the write and edit Pi tools from targeting files inside banned
  * folders (e.g. .git/). Folder names are configured in
- * pi/lib/folder-guard.ts's BANNED_FOLDERS list.
+ * ../../lib/folder-guard.ts's BANNED_FOLDERS list.
  *
  * Bash commands that target banned folder paths (cp, mv, rm, tee, …) are
  * blocked by the command-policy extension's "protected folder" entry
  * instead, using the same BANNED_FOLDERS list and isPathInsideBannedFolder
- * check — see pi/extensions/command-policy/logic.ts.
+ * check — see ../command-policy/logic.ts.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";

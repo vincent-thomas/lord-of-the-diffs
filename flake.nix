@@ -308,22 +308,23 @@
 
               # Copy extensions + lib + packages so ../lib/ imports and
               # @vt-pi/command-policy imports both work
-              cp -r ${./pi/extensions}/. $out/extensions/
-              cp -r ${./pi/lib}/. $out/lib/
+              cp -r ${./packages/agent-lord/extensions}/. $out/extensions/
+              cp -r ${./packages/agent-lord/lib}/. $out/lib/
               cp -r ${./packages}/. $out/packages/
 
               # Copy skills, AGENTS.md, and bin scripts
-              cp -r ${./pi/skills}/. $out/skills/
-              cp ${./pi/AGENTS.md} $out/AGENTS.md
+              cp -r ${./packages/agent-lord/skills}/. $out/skills/
+              cp ${./packages/agent-lord/AGENTS.md} $out/AGENTS.md
 
               # Real npm deps (@mariozechner/pi-coding-agent, …) from
               # workspaceDeps. Its @vt-pi/command-policy entry was dereferenced
               # from a differently-shaped tree (this repo's own packages/*
               # layout) so it doesn't match this derivation's flattened
               # $out/{lib,extensions,packages}; replace it with a symlink
-              # that does. (pi/ itself is a single workspace member — lib/
-              # and extensions/* reference each other with relative imports,
-              # no node_modules entry needed for it.)
+              # that does. Same story for @vt-pi/agent-lord — nothing
+              # resolves it by package name (lib/ and extensions/* use
+              # relative imports), so it's simply dropped rather than
+              # relinked.
               cp -r ${workspaceDeps}/node_modules $out/node_modules
               chmod -R u+w $out/node_modules
               rm -rf $out/node_modules/@vt-pi

@@ -1,11 +1,11 @@
 ---
 name: command-policy
-description: "Add, modify, or remove shell command policy entries in pi/extensions/command-policy/logic.ts. Use when allowing a new command, banning a command, or restricting flags."
+description: "Add, modify, or remove shell command policy entries in packages/agent-lord/extensions/command-policy/logic.ts. Use when allowing a new command, banning a command, or restricting flags."
 ---
 
 # command-policy
 
-The command policy lives in `pi/extensions/command-policy/logic.ts` as an array of `CommandPolicyEntry` objects in the `COMMAND_POLICY_ENTRIES` constant. The policy is enforced by `pi/extensions/command-policy/index.ts` which uses `createCommandPolicyExtension()` from `@vt-pi/command-policy` (the `packages/command-policy` workspace package).
+The command policy lives in `packages/agent-lord/extensions/command-policy/logic.ts` as an array of `CommandPolicyEntry` objects in the `COMMAND_POLICY_ENTRIES` constant. The policy is enforced by `packages/agent-lord/extensions/command-policy/index.ts` which uses `createCommandPolicyExtension()` from `@vt-pi/command-policy` (the `packages/command-policy` workspace package).
 
 ## Entry types
 
@@ -89,7 +89,7 @@ If `subcommand` is not set, the policy matches any invocation of that command (e
 
 ## Adding an entry
 
-1. Open `pi/extensions/command-policy/logic.ts`
+1. Open `packages/agent-lord/extensions/command-policy/logic.ts`
 2. Add a new object to the `COMMAND_POLICY_ENTRIES` array
 3. Run `nix build` to verify the extension still compiles and tests pass
 4. No changes needed to `index.ts` — it applies all entries automatically

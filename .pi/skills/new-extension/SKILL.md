@@ -1,16 +1,16 @@
 ---
 name: new-extension
-description: "Scaffold a new Pi extension in the vt-pi repo with the standard layout: index.ts, logic.ts, logic.test.ts, and shared lib imports from ../../lib/. Use when adding a new extension under pi/extensions/."
+description: "Scaffold a new Pi extension in the vt-pi repo with the standard layout: index.ts, logic.ts, logic.test.ts, and shared lib imports from ../../lib/. Use when adding a new extension under packages/agent-lord/extensions/."
 ---
 
 # new-extension
 
-Scaffold a new extension in `pi/extensions/<name>/` following vt-pi conventions.
+Scaffold a new extension in `packages/agent-lord/extensions/<name>/` following vt-pi conventions.
 
 ## File layout
 
 ```
-pi/extensions/<name>/
+packages/agent-lord/extensions/<name>/
 ├── index.ts         # Entry point — Pi imports, export default, lifecycle hooks
 ├── logic.ts         # Pure logic — no Pi imports, testable, import from ../../lib/
 └── logic.test.ts    # Tests alongside the logic file
@@ -127,8 +127,8 @@ test("returns expected value", () => {
 
 ## No manual registration needed
 
-The flake auto-discovers all directories under `pi/extensions/` and generates `--extension` flags for them. Test files (`*.test.ts`) are skipped automatically.
+The flake auto-discovers all directories under `packages/agent-lord/extensions/` and generates `--extension` flags for them. Test files (`*.test.ts`) are skipped automatically.
 
 ## Adding shared code
 
-If your extension needs shared logic that could be useful to other extensions, put it in `pi/lib/` (not in the extension's `logic.ts`). Keep `pi/lib/` files free of Pi imports — they're pure TypeScript modules.
+If your extension needs shared logic that could be useful to other extensions, put it in `packages/agent-lord/lib/` (not in the extension's `logic.ts`). Keep `packages/agent-lord/lib/` files free of Pi imports — they're pure TypeScript modules.
