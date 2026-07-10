@@ -248,7 +248,7 @@
 
           # Hash covers all npm deps declared in the root package-lock.json.
           # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
-          npmDepsHash = "sha256-GbrqPFB5CGRJU6ta4E/AADy6j20ryoEXYA0GcgeXonY=";
+          npmDepsHash = "sha256-Udv4wvgayF7oqsxAef+jMvGoAvbVDhGFB5Si3H0EEU4=";
 
           inherit nodejs;
 
