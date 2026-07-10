@@ -101,6 +101,20 @@ inheriting agent-lord's system prompt. This keeps multi-file "where is X" /
 "how does Y work" questions off agent-lord's own (pricier) model and out of
 its own context, at the cost of one round trip into a fresh sub-session.
 
+### Advisor (`packages/agent-lord/extensions/advisor/`, `packages/agent-advisor/`)
+
+An `advisor` tool that lets agent-lord consult a separate, stronger sub-agent
+session when it's genuinely stuck (repeated failed attempts, an ambiguous
+approach, a hard-to-diagnose bug) — not for routine work. Structurally a
+mirror of `explore`: an isolated in-process session, restricted to
+`read`/`grep`/`find`/`ls`, with no inherited extensions/skills/`AGENTS.md`.
+Where `explore` hands cheap lookups to a *cheaper* model to keep them off
+agent-lord's context, `advisor` hands hard problems to a *stronger* model —
+kept off agent-lord's own turn loop, so the frontier model's cost is paid
+once on a bounded question instead of on every turn of an already-large
+context. There's no automatic trigger; agent-lord decides when it's stuck
+and calls the tool itself.
+
 ### Sandbox (`packages/agent-lord/extensions/sandbox/`)
 
 A `/sandbox` command that puts the agent in read-only mode. In sandbox mode,
@@ -124,6 +138,7 @@ vt-pi/
     ├── agent-lord/             # Standalone @vt-pi/agent-lord npm package
     │   ├── AGENTS.md           # System prompt (bundled into binary)
     │   ├── extensions/
+    │   │   ├── advisor/        # Wires the advisor tool into @vt-pi/agent-advisor
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
     │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
     │   │   ├── explore/        # Wires the explore tool into @vt-pi/agent-explorer
@@ -140,6 +155,7 @@ vt-pi/
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts
     │   └── skills/              # Skill definitions (populated at build time)
+    ├── agent-advisor/           # Read-only advisory sub-agent, stronger model (in-process SDK session)
     ├── agent-explorer/          # Read-only exploration sub-agent (in-process SDK session)
     └── command-policy/          # Shell command allow-list engine
 ```
