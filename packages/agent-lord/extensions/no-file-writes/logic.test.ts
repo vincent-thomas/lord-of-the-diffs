@@ -35,6 +35,12 @@ const shouldBlock = [
 	"cmd 2>&1 3>trace.log",
 	// A real redirection following a quoted arg that itself contains `>`.
 	'echo "score > threshold" > result.txt',
+	// Quoted redirection targets are still real file writes — quoting a
+	// filename must not bypass detection.
+	'echo hi > "file.txt"',
+	"echo hi > 'file.txt'",
+	'echo hi >> "output.log"',
+	'echo "some text" > "real_file.txt"',
 ];
 
 for (const cmd of shouldBlock) {
@@ -44,6 +50,11 @@ for (const cmd of shouldBlock) {
 		assert.ok(result.segment, `expected segment for ${cmd}`);
 	});
 }
+
+test("reports the real filename (not a masked placeholder) for a quoted target", () => {
+	const result = hasFileWriteRedirection('echo hi > "file.txt"');
+	assert.equal(result.segment, '> "file.txt"');
+});
 
 const shouldPass = [
 	"echo 'status message'",
@@ -58,6 +69,9 @@ const shouldPass = [
 	"echo hi >/dev/null",
 	"echo hi >>/dev/null",
 	"cmd >&1",
+	// Quoting an excluded target doesn't change what it resolves to.
+	'echo hi > "/dev/null"',
+	"echo hi > '/dev/null'",
 	"grep pattern files",
 	"echo concatenate things",
 	"which printf",
