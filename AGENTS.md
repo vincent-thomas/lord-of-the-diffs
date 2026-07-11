@@ -36,7 +36,6 @@ vt-pi/
     │   │   ├── fix-ci/         # push_and_check_ci tool; blocks git push in bash
     │   │   ├── git-commit/     # git_commit tool; blocks git commit in bash
     │   │   ├── no-file-writes/ # Blocks >, >> shell redirections to files
-    │   │   ├── sandbox/        # /sandbox command for read-only mode
     │   │   └── write-guard/    # Blocks write on existing files > 50 lines
     │   ├── lib/                # Pure logic shared across extensions
     │   │   ├── exec-async.ts
@@ -53,7 +52,7 @@ Each extension under `packages/agent-lord/extensions/` exports a default functio
 Pi `ExtensionAPI`. Extensions use three main APIs:
 
 - `pi.registerTool(name, { parameters, execute })` — registers a tool the agent can invoke
-- `pi.registerCommand(name, { handler })` — registers a slash command like `/sandbox`
+- `pi.registerCommand(name, { handler })` — registers a slash command
 - `pi.on("tool_call" | "before_agent_start" | "agent_end", handler)` — lifecycle hooks
 
 The `packages/agent-lord/lib/` directory holds shared code, imported via relative paths (e.g.

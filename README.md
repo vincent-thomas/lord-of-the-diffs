@@ -123,12 +123,6 @@ sub-agent — the raw grep/read churn is distilled by the cheap model and never
 enters the frontier context — while it reads directly for the precise,
 targeted lookups where exact bytes matter.
 
-### Sandbox (`packages/agent-lord/extensions/sandbox/`)
-
-A `/sandbox` command that puts the agent in read-only mode. In sandbox mode,
-the write and edit tools are blocked — the agent can only read files and run
-read-only commands.
-
 ### Pre-check system (`packages/agent-lord/lib/precheck.ts`)
 
 Runs `make` before every commit. The project defines what "valid" means
@@ -153,7 +147,6 @@ vt-pi/
     │   │   ├── fix-ci/         # push_and_check_ci tool
     │   │   ├── git-commit/     # git_commit tool
     │   │   ├── no-file-writes/ # Blocks >/>> in bash
-    │   │   ├── sandbox/        # /sandbox read-only mode
     │   │   └── write-guard/    # Blocks write on large existing files
     │   ├── lib/                # Pure logic, no Pi SDK imports
     │   │   ├── exec-async.ts
