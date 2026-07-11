@@ -15,6 +15,7 @@ import {
 	extractRunId,
 	trimLog,
 	parseReviewComments,
+	parseReviews,
 } from "./logic.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -174,6 +175,53 @@ suite("parseReviewComments", () => {
 	test("non-array input returns empty list", () => {
 		assert.deepEqual(parseReviewComments(null, 1), []);
 		assert.deepEqual(parseReviewComments(undefined, 1), []);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// parseReviews
+// ---------------------------------------------------------------------------
+
+suite("parseReviews", () => {
+	test("maps a REST-shaped review (reviewer under .user)", () => {
+		const raw = [
+			{
+				id: 7,
+				user: { login: "alice" },
+				state: "CHANGES_REQUESTED",
+				body: "needs work",
+				submitted_at: "2026-01-02T03:04:05Z",
+				commit_id: "abc123",
+			},
+		];
+		const [review] = parseReviews(raw);
+		assert.deepEqual(review, {
+			id: 7,
+			author: "alice",
+			state: "CHANGES_REQUESTED",
+			body: "needs work",
+			submittedAt: "2026-01-02T03:04:05Z",
+			commitId: "abc123",
+		});
+	});
+
+	test("falls back to .author.login when .user is absent (GraphQL shape)", () => {
+		const [review] = parseReviews([{ id: 8, author: { login: "bob" }, state: "APPROVED" }]);
+		assert.equal(review.author, "bob");
+	});
+
+	test("defaults missing fields", () => {
+		const [review] = parseReviews([{ id: 9 }]);
+		assert.equal(review.author, "unknown");
+		assert.equal(review.state, "UNKNOWN");
+		assert.equal(review.body, "");
+		assert.equal(review.submittedAt, "");
+		assert.equal(review.commitId, null);
+	});
+
+	test("non-array input returns empty list", () => {
+		assert.deepEqual(parseReviews(null), []);
+		assert.deepEqual(parseReviews(undefined), []);
 	});
 });
 
