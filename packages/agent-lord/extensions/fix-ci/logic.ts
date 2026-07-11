@@ -901,7 +901,7 @@ export async function addReviewers(
 // Review types
 // ---------------------------------------------------------------------------
 
-interface Review {
+export interface Review {
 	id: number;
 	author: string;
 	state: string; // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING
@@ -1074,6 +1074,39 @@ export const MAX_REVIEW_POLLS = 120; // 120 * 30s = 60 minutes
 const REVIEW_POLL_INTERVAL_MS = 30_000;
 
 /**
+ * Pick the review that decides the PR's outcome from the currently-active
+ * reviews (already narrowed to the current HEAD, with DISMISSED removed), or
+ * null when no decision has been reached yet.
+ *
+ * Mirrors how GitHub itself derives a PR's review decision: only APPROVED and
+ * CHANGES_REQUESTED reviews are decisive — a COMMENTED or PENDING review never
+ * changes the outcome, so a reviewer who approves (or requests changes) and
+ * then leaves a plain follow-up comment is still approving (or still blocking).
+ * Taking the single latest review by timestamp, as this used to, let that
+ * trailing comment mask the decision and stall the poll until it timed out.
+ *
+ * Each reviewer's *latest* decisive review is what counts (an earlier one they
+ * superseded is ignored). If any reviewer's current stance is CHANGES_REQUESTED
+ * the PR is blocked, so that wins over approvals; otherwise the most recent
+ * approval is returned.
+ */
+export function decisiveReview(active: Review[]): Review | null {
+	const latestByAuthor = new Map<string, Review>();
+	for (const r of active) {
+		if (r.state !== "APPROVED" && r.state !== "CHANGES_REQUESTED") continue;
+		const prev = latestByAuthor.get(r.author);
+		if (!prev || r.submittedAt > prev.submittedAt) latestByAuthor.set(r.author, r);
+	}
+
+	const decisive = [...latestByAuthor.values()];
+	if (decisive.length === 0) return null;
+
+	const blocking = decisive.filter((r) => r.state === "CHANGES_REQUESTED");
+	const pool = blocking.length > 0 ? blocking : decisive;
+	return pool.reduce((a, b) => (a.submittedAt > b.submittedAt ? a : b));
+}
+
+/**
  * Poll for PR reviews until a decision is reached (approved or changes
  * requested). Times out after MAX_REVIEW_POLLS polls.
  *
@@ -1119,38 +1152,45 @@ export async function waitForReview(
 			continue;
 		}
 
-		// Find the most recent active review by submittedAt.
+		// A decisive review (approval / changes requested) settles the outcome
+		// even if a later COMMENTED/PENDING review exists — those never change a
+		// PR's decision on GitHub, so they must not mask an earlier one here.
+		const decisive = decisiveReview(active);
+
+		if (decisive?.state === "APPROVED") {
+			onStatus?.(`PR approved by @${decisive.author}.`);
+			return {
+				decision: "approved",
+				reviews,
+				comments: [],
+				reviewer: decisive.author,
+				reviewBody: decisive.body,
+			};
+		}
+		if (decisive?.state === "CHANGES_REQUESTED") {
+			onStatus?.(
+				`Changes requested by @${decisive.author}. Fetching review comments…`,
+			);
+			// Fetch comments linked to this specific review directly.
+			const linkedComments = await fetchCommentsForReview(
+				cwd, prNumber, decisive.id, signal,
+			);
+			return {
+				decision: "changes_requested",
+				reviews,
+				comments: linkedComments,
+				reviewer: decisive.author,
+				reviewBody: decisive.body,
+			};
+		}
+
+		// No decision yet — report the most recent active review's status and
+		// keep polling.
 		const latest = active.reduce((a, b) =>
 			a.submittedAt > b.submittedAt ? a : b,
 		);
 
 		switch (latest.state) {
-			case "APPROVED": {
-				onStatus?.(`PR approved by @${latest.author}.`);
-				return {
-					decision: "approved",
-					reviews,
-					comments: [],
-					reviewer: latest.author,
-					reviewBody: latest.body,
-				};
-			}
-			case "CHANGES_REQUESTED": {
-				onStatus?.(
-					`Changes requested by @${latest.author}. Fetching review comments…`,
-				);
-				// Fetch comments linked to this specific review directly.
-				const linkedComments = await fetchCommentsForReview(
-					cwd, prNumber, latest.id, signal,
-				);
-				return {
-					decision: "changes_requested",
-					reviews,
-					comments: linkedComments,
-					reviewer: latest.author,
-					reviewBody: latest.body,
-				};
-			}
 			case "COMMENTED": {
 				const bodyPreview = latest.body
 					? ` — "${latest.body.slice(0, 80)}${latest.body.length > 80 ? "…" : ""}"`
