@@ -4,11 +4,6 @@
  * No pi imports — importable from the extension index and tests.
  */
 
-// Re-exports from lib so consumers (index.ts, tests) keep the same import
-// path. The Makefile check lives in lib/folder-guard.ts because the
-// command-policy extension enforces the same protection on bash commands.
-export { baseName, isMakefile } from "../../lib/folder-guard.ts";
-
 /** Maximum line count before write tool is blocked on existing files. */
 export const MAX_LINES = 50;
 
@@ -27,15 +22,5 @@ export function checkFileTooLarge(
 		`Cannot overwrite "${filePath}" — it has ${lineCount} lines (threshold: ${lineThreshold}). ` +
 		`Use the \`edit\` tool to make surgical changes instead. ` +
 		`The \`write\` tool on large existing files risks silently dropping content.`
-	);
-}
-
-/** Reason message for blocking Makefile modifications. */
-export function makefileBlockReason(toolType: string, filePath: string): string {
-	return (
-		`Cannot ${toolType} "${filePath}" — the Makefile defines the project's ` +
-		`validation contract and should only be changed intentionally by the user. ` +
-		`If the Makefile really needs to change, tell the user what change is needed ` +
-		`and why, and ask them to make it.`
 	);
 }

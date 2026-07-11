@@ -34,14 +34,12 @@ vt-pi/
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
     │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
     │   │   ├── fix-ci/         # push_and_check_ci tool; blocks git push in bash
-    │   │   ├── folder-protector/ # Blocks write/edit on protected folders (e.g. .git/)
     │   │   ├── git-commit/     # git_commit tool; blocks git commit in bash
     │   │   ├── no-file-writes/ # Blocks >, >> shell redirections to files
     │   │   ├── sandbox/        # /sandbox command for read-only mode
     │   │   └── write-guard/    # Blocks write on existing files > 50 lines
     │   ├── lib/                # Pure logic shared across extensions
     │   │   ├── exec-async.ts
-    │   │   ├── folder-guard.ts
     │   │   ├── git-utils.ts
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts

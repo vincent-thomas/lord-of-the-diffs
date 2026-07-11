@@ -4,7 +4,6 @@
 
 import { CommandPolicyStatus, type CommandPolicyEntry } from "@vt-pi/command-policy";
 import { isAwkCommand, isPerlCommand, isPythonCommand } from "./predicates.ts";
-import { BANNED_FOLDERS, findBannedFolderPath, findMakefilePath } from "../../lib/folder-guard.ts";
 
 export const COMMAND_POLICY_SYSTEM_PROMPT = `
 Only run shell commands that are explicitly allowed by the command policy.
@@ -15,32 +14,6 @@ write/edit for file changes, rg for search, and fd for file discovery.
 `;
 
 export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
-	// Checked before any other entry (first match wins in evaluateCommand) so
-	// a command that would otherwise be allowed (cp, mv, rm, mkdir, …) is
-	// still blocked when its args target a protected folder — shared with the
-	// folder-protector extension's write/edit checks via ../../lib/folder-guard.ts.
-	{
-		name: "protected folder",
-		status: CommandPolicyStatus.Banned,
-		command: (use) => findBannedFolderPath(use, BANNED_FOLDERS) !== null,
-		description:
-			"Files inside .git, node_modules, or target should not be modified directly via shell commands. " +
-			"Use the write or edit tool instead, or ask the user.",
-	},
-	// Also checked ahead of the allow entries: write-guard blocks the write and
-	// edit tools from touching a Makefile, but without this entry the shell
-	// could still delete or replace it (`rm Makefile`, `mv other Makefile`,
-	// `git rm Makefile`) — and lib/precheck.ts silently passes when no Makefile
-	// exists, so that would neutralize every pre-commit check.
-	{
-		name: "Makefile",
-		status: CommandPolicyStatus.Banned,
-		command: (use) => findMakefilePath(use) !== null,
-		description:
-			"The Makefile defines the project's validation contract and must not be created, " +
-			"replaced, or deleted via shell commands. If the Makefile really needs to change, " +
-			"tell the user what change is needed and why, and ask them to make it.",
-	},
 	{ name: "sudo", status: CommandPolicyStatus.Banned, command: "sudo", description: "It is banned to try to gain superuser access" },
 	{ name: "doas", status: CommandPolicyStatus.Banned, command: "doas", description: "It is banned to try to gain superuser access" },
 	{ name: "cat", status: CommandPolicyStatus.Banned, command: "cat", description: "Use the read tool to view file contents." },

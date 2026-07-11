@@ -12,15 +12,13 @@
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { CommandPolicyStatus, type CommandUse } from "@vt-pi/command-policy";
+import { CommandPolicyStatus } from "@vt-pi/command-policy";
 import { COMMAND_POLICY_ENTRIES } from "./logic.ts";
 
 suite("COMMAND_POLICY_ENTRIES");
 function findEntry(name: string) {
 	return COMMAND_POLICY_ENTRIES.find((entry) => entry.name === name);
 }
-
-const use = (name: string, args: string[]): CommandUse => ({ name, args, segment: `${name} ${args.join(" ")}` });
 
 test("allows commands by exact command", () => {
 	assert.equal(findEntry("rg")?.status, CommandPolicyStatus.Allowed);
@@ -82,51 +80,4 @@ test("cp and mv ban -t/--target-directory, which reroute the write destination b
 test("supports allowed flags per allowed entry", () => {
 	assert.ok(findEntry("git status")?.allowedFlags?.includes("--short"));
 	assert.equal(findEntry("git status")?.bannedFlags, undefined);
-});
-
-test("protected folder entry is checked first, ahead of otherwise-allowed commands", () => {
-	assert.equal(COMMAND_POLICY_ENTRIES[0].name, "protected folder");
-	assert.equal(COMMAND_POLICY_ENTRIES[0].status, CommandPolicyStatus.Banned);
-});
-
-test("protected folder entry blocks file-manipulation commands targeting .git/node_modules/target", () => {
-	const command = findEntry("protected folder")!.command as (u: CommandUse) => boolean;
-	assert.ok(command(use("cp", ["file", ".git/somewhere"])));
-	assert.ok(command(use("rm", ["-rf", "node_modules"])));
-	assert.ok(command(use("tee", [".git/hooks/pre-commit"])));
-	assert.ok(command(use("dd", ["if=payload", "of=.git/hooks/pre-commit"])));
-});
-
-test("protected folder entry does not match unrelated commands or paths", () => {
-	const command = findEntry("protected folder")!.command as (u: CommandUse) => boolean;
-	assert.ok(!command(use("cp", ["file", "out/dir"])));
-	assert.ok(!command(use("rg", ["foo"])));
-});
-
-test("Makefile entry is checked ahead of the allowed rm/cp/mv/git rm entries", () => {
-	const makefileIndex = COMMAND_POLICY_ENTRIES.findIndex((e) => e.name === "Makefile");
-	assert.ok(makefileIndex >= 0);
-	assert.equal(COMMAND_POLICY_ENTRIES[makefileIndex].status, CommandPolicyStatus.Banned);
-	for (const name of ["rm", "cp", "mv", "git rm"]) {
-		const allowedIndex = COMMAND_POLICY_ENTRIES.findIndex((e) => e.name === name);
-		assert.ok(makefileIndex < allowedIndex, `Makefile entry must precede "${name}"`);
-	}
-});
-
-test("Makefile entry blocks shell commands that delete, replace, or create a Makefile", () => {
-	const command = findEntry("Makefile")!.command as (u: CommandUse) => boolean;
-	assert.ok(command(use("rm", ["Makefile"])));
-	assert.ok(command(use("rm", ["-f", "Makefile"])));
-	assert.ok(command(use("git", ["rm", "Makefile"])));
-	assert.ok(command(use("mv", ["Makefile.new", "Makefile"])));
-	assert.ok(command(use("cp", ["other", "src/Makefile"])));
-	assert.ok(command(use("touch", ["makefile"])));
-});
-
-test("Makefile entry does not match reads or unrelated paths", () => {
-	const command = findEntry("Makefile")!.command as (u: CommandUse) => boolean;
-	assert.ok(!command(use("head", ["Makefile"])));
-	assert.ok(!command(use("rm", ["file.txt"])));
-	assert.ok(!command(use("rm", ["Makefile.am"])));
-	assert.ok(!command(use("git", ["add", "Makefile"])));
 });
