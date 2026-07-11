@@ -33,6 +33,16 @@ const shouldBlock = [
 	"cmd 2>/tmp/errors.log",
 	"build 3>output.txt",
 	"cmd 2>&1 3>trace.log",
+	// No space *before* the operator either (valid bash: `hi>file` redirects).
+	"echo hi>file.txt",
+	"echo hi>>log.txt",
+	"cat a.txt>b.txt",
+	"cmd arg 2>>errors.log",
+	// &> / &>> redirect stdout+stderr to a file; the `&` before `>` must not
+	// hide the operator.
+	"echo hi&>file.txt",
+	"echo hi &> file.txt",
+	"echo hi&>>log.txt",
 	// A real redirection following a quoted arg that itself contains `>`.
 	'echo "score > threshold" > result.txt',
 	// Quoted redirection targets are still real file writes — quoting a
@@ -69,6 +79,12 @@ const shouldPass = [
 	"echo hi >/dev/null",
 	"echo hi >>/dev/null",
 	"cmd >&1",
+	// …including with no space before the operator.
+	"echo hi>/dev/null",
+	"echo hi>>/dev/null",
+	"cmd arg>&2",
+	"foo 2>&1",
+	"cmd&>/dev/null",
 	// Quoting an excluded target doesn't change what it resolves to.
 	'echo hi > "/dev/null"',
 	"echo hi > '/dev/null'",
