@@ -7,7 +7,7 @@
  * (which freezes the TUI). The abort signal is threaded through so Ctrl+C
  * kills child processes promptly.
  */
-import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
+import { execAsync, execSucceeds, extractErrorOutput, tryExec } from "../../lib/exec-async.ts";
 import { hasUpstream, currentBranch } from "../../lib/git-utils.ts";
 import { shellQuote } from "../../lib/shell-quote.ts";
 
@@ -78,24 +78,6 @@ export async function gitPush(cwd: string, signal?: AbortSignal): Promise<PushRe
 // Check mode detection
 // ---------------------------------------------------------------------------
 
-/**
- * Run a shell command and return its trimmed stdout, or null if it fails or
- * produces no output. Shared by the many read-only `git`/`gh` lookups below.
- */
-async function tryExec(
-	command: string,
-	cwd: string,
-	timeout: number,
-	signal?: AbortSignal,
-): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync(command, { cwd, timeout, signal });
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
-}
-
 /** Fetches `branch` from origin. Callers only care about success/failure, not the output. */
 async function fetchBranch(cwd: string, branch: string, signal?: AbortSignal): Promise<void> {
 	await execAsync(`git fetch origin ${shellQuote(branch)} 2>&1`, {
@@ -114,16 +96,14 @@ const GH_PR_BASE_BRANCH_QUERY = "gh pr view --json baseRefName --jq '.baseRefNam
  * "main" if the lookup fails or `gh` isn't available.
  */
 async function getDefaultBranch(cwd: string, signal?: AbortSignal): Promise<string> {
-	const branch = await tryExec(GH_DEFAULT_BRANCH_QUERY, cwd, 10_000, signal);
+	const branch = await tryExec(GH_DEFAULT_BRANCH_QUERY, { cwd, timeout: 10_000, signal });
 	return branch ?? "main";
 }
 
 export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise<number | null> {
 	const stdout = await tryExec(
 		"gh pr view --json number,state --jq 'select(.state != \"CLOSED\" and .state != \"MERGED\") | .number' 2>/dev/null",
-		cwd,
-		15_000,
-		signal,
+		{ cwd, timeout: 15_000, signal },
 	);
 	const num = stdout ? parseInt(stdout, 10) : NaN;
 	return isNaN(num) ? null : num;
@@ -134,11 +114,11 @@ export async function detectPrNumber(cwd: string, signal?: AbortSignal): Promise
  * Returns null if there is no PR for the current branch.
  */
 export async function getPrState(cwd: string, signal?: AbortSignal): Promise<string | null> {
-	return tryExec("gh pr view --json state --jq '.state' 2>/dev/null", cwd, 15_000, signal);
+	return tryExec("gh pr view --json state --jq '.state' 2>/dev/null", { cwd, timeout: 15_000, signal });
 }
 
 export async function getHeadSha(cwd: string, signal?: AbortSignal): Promise<string | null> {
-	return tryExec("git rev-parse HEAD", cwd, 5_000, signal);
+	return tryExec("git rev-parse HEAD", { cwd, timeout: 5_000, signal });
 }
 
 /**
@@ -515,12 +495,12 @@ export async function getPrBaseBranch(
 	signal?: AbortSignal,
 ): Promise<string | null> {
 	// Try to get the base branch from an existing PR first.
-	const baseFromPr = await tryExec(GH_PR_BASE_BRANCH_QUERY, cwd, 15_000, signal);
+	const baseFromPr = await tryExec(GH_PR_BASE_BRANCH_QUERY, { cwd, timeout: 15_000, signal });
 	if (baseFromPr) return baseFromPr;
 
 	// Fall back to the repo's default branch (e.g. "main") when no PR exists.
 	// This ensures the base-branch-ahead check runs even on the first push.
-	return tryExec(GH_DEFAULT_BRANCH_QUERY, cwd, 15_000, signal);
+	return tryExec(GH_DEFAULT_BRANCH_QUERY, { cwd, timeout: 15_000, signal });
 }
 
 /**
@@ -534,9 +514,7 @@ async function getBranchShaViaApi(
 ): Promise<string | null> {
 	return tryExec(
 		`gh api ${shellQuote(`repos/{owner}/{repo}/git/ref/heads/${branch}`)} --jq '.object.sha' 2>/dev/null`,
-		cwd,
-		15_000,
-		signal,
+		{ cwd, timeout: 15_000, signal },
 	);
 }
 
@@ -676,19 +654,14 @@ export async function needsPullBeforePush(
 		// Fetch the latest remote refs for this branch
 		await fetchBranch(cwd, branch, signal);
 
-		// origin/<branch> is an ancestor of HEAD → can fast-forward push → no pull needed
-		// If NOT an ancestor, remote is ahead or histories diverged → pull needed
-		try {
-			await execAsync(
-				`git merge-base --is-ancestor ${shellQuote(`origin/${branch}`)} HEAD 2>/dev/null`,
-				{ cwd, timeout: 10_000, signal },
-			);
-			// exit 0 = is ancestor = remote is behind or equal → no pull needed
-			return false;
-		} catch {
-			// non-zero = not an ancestor → pull needed
-			return true;
-		}
+		// origin/<branch> is an ancestor of HEAD → can fast-forward push → no pull
+		// needed (exit 0). If NOT an ancestor, remote is ahead or histories
+		// diverged (non-zero) → pull needed.
+		const isAncestor = await execSucceeds(
+			`git merge-base --is-ancestor ${shellQuote(`origin/${branch}`)} HEAD 2>/dev/null`,
+			{ cwd, timeout: 10_000, signal },
+		);
+		return !isAncestor;
 	} catch {
 		return false;
 	}

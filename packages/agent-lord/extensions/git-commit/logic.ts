@@ -3,7 +3,7 @@
  *
  * Uses shared helpers from lib for pre-checks, async exec, and git utilities.
  */
-import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
+import { execAsync, execSucceeds, extractErrorOutput, tryExec } from "../../lib/exec-async.ts";
 import { shellQuote } from "../../lib/shell-quote.ts";
 
 // Re-exports from lib so consumers (index.ts, tests) keep the same import path.
@@ -23,17 +23,14 @@ export async function branchExistsOnRemote(
 	branch: string,
 	signal?: AbortSignal,
 ): Promise<boolean> {
-	try {
-		const { stdout } = await execAsync(
-			`git ls-remote --heads origin ${shellQuote(branch)}`,
-			{ cwd, timeout: 10_000, signal },
-		);
-		// ls-remote returns empty if branch doesn't exist
-		return stdout.trim().length > 0;
-	} catch {
-		// If git fails, assume branch doesn't exist
-		return false;
-	}
+	// ls-remote returns empty output if the branch doesn't exist; tryExec maps
+	// both that and an outright failure to null, so a non-null result means the
+	// branch is present on the remote.
+	const stdout = await tryExec(
+		`git ls-remote --heads origin ${shellQuote(branch)}`,
+		{ cwd, timeout: 10_000, signal },
+	);
+	return stdout !== null;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,12 +49,7 @@ export interface CommitResult {
  * instead of having to remember which exit code means what.
  */
 async function hasStagedChanges(cwd: string, signal?: AbortSignal): Promise<boolean> {
-	try {
-		await execAsync("git diff --cached --quiet", { cwd, timeout: 5_000, signal });
-		return false;
-	} catch {
-		return true;
-	}
+	return !(await execSucceeds("git diff --cached --quiet", { cwd, timeout: 5_000, signal }));
 }
 
 /**

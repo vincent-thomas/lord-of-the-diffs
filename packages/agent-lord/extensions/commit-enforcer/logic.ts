@@ -3,7 +3,7 @@
  *
  * No pi imports — testable logic only.
  */
-import { execAsync } from "../../lib/exec-async.ts";
+import { tryExec } from "../../lib/exec-async.ts";
 import { currentBranch, hasUpstream, isWorktreeDirty } from "../../lib/git-utils.ts";
 
 export interface GitState {
@@ -24,22 +24,16 @@ export async function hasUnpushedCommits(
 	cwd: string,
 	signal?: AbortSignal,
 ): Promise<boolean> {
-	try {
-		const branch = await currentBranch(cwd, signal);
-		if (!branch) return false;
+	const branch = await currentBranch(cwd, signal);
+	if (!branch) return false;
 
-		const upstream = await hasUpstream(cwd, signal);
-		if (!upstream) return false;
+	const upstream = await hasUpstream(cwd, signal);
+	if (!upstream) return false;
 
-		const result = await execAsync("git log @{u}..HEAD --oneline", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		return result.stdout.trim().length > 0;
-	} catch {
-		return false;
-	}
+	// tryExec swallows a missing @{u} or any other git failure to null, matching
+	// this check's fail-closed contract (no answer → assume nothing to push).
+	const log = await tryExec("git log @{u}..HEAD --oneline", { cwd, timeout: 5_000, signal });
+	return log !== null;
 }
 
 /**
