@@ -143,6 +143,26 @@ test("detects git rm targeting a banned folder", () => {
 	assert.equal(findBannedFolderPath(use("git", ["rm", ".git/config"]), BANNED_FOLDERS), ".git/config");
 });
 
+test("sees through shell quoting hiding a banned folder segment", () => {
+	// The shell writes to `.git/config` in every one of these — the quoting is
+	// only there to keep `.git` from surfacing as its own path segment.
+	assert.equal(findBannedFolderPath(use("rm", ["'.git/config'"]), BANNED_FOLDERS), ".git/config");
+	assert.equal(findBannedFolderPath(use("rm", ['".git/config"']), BANNED_FOLDERS), ".git/config");
+	assert.equal(findBannedFolderPath(use("rm", ["'.git'/config"]), BANNED_FOLDERS), ".git/config");
+	assert.equal(findBannedFolderPath(use("rm", [".git/'config'"]), BANNED_FOLDERS), ".git/config");
+	assert.equal(findBannedFolderPath(use("cp", ["x", "'node_modules/pkg'"]), BANNED_FOLDERS), "node_modules/pkg");
+});
+
+test("sees through quoting on dd's of=/if= path values and keys", () => {
+	assert.equal(findBannedFolderPath(use("dd", ["if=payload", "of='.git/x'"]), BANNED_FOLDERS), ".git/x");
+	assert.equal(findBannedFolderPath(use("dd", ["'of=.git/x'"]), BANNED_FOLDERS), ".git/x");
+});
+
+test("does not over-match legitimately quoted non-banned paths", () => {
+	assert.equal(findBannedFolderPath(use("rm", ["'src/index.ts'"]), BANNED_FOLDERS), null);
+	assert.equal(findBannedFolderPath(use("mv", ["'my file.txt'", "out/"]), BANNED_FOLDERS), null);
+});
+
 suite("findMakefilePath — file-manipulation invocations targeting a Makefile");
 
 test("detects rm deleting the Makefile", () => {
@@ -180,6 +200,14 @@ test("does not match Makefile-adjacent names", () => {
 	assert.equal(findMakefilePath(use("rm", ["Makefile.am"])), null);
 	assert.equal(findMakefilePath(use("rm", ["makefile.in"])), null);
 	assert.equal(findMakefilePath(use("rm", ["not-a-makefile"])), null);
+});
+
+test("sees through shell quoting hiding the Makefile", () => {
+	assert.equal(findMakefilePath(use("rm", ["'Makefile'"])), "Makefile");
+	assert.equal(findMakefilePath(use("rm", ['"Makefile"'])), "Makefile");
+	assert.equal(findMakefilePath(use("mv", ["other", "'Makefile'"])), "Makefile");
+	// Quoting must not turn a Makefile-adjacent name into a false positive.
+	assert.equal(findMakefilePath(use("rm", ["'Makefile.am'"])), null);
 });
 
 test("returns null for non-file-manipulation commands", () => {

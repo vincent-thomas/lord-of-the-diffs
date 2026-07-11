@@ -60,6 +60,44 @@ const FILE_MANIP_COMMANDS = new Set([
 const DD_PATH_KEYS = new Set(["if", "of"]);
 
 /**
+ * Resolve the shell quoting/escaping on a single argument token to the literal
+ * value the shell would pass to the command. Peels off matched `'...'`/`"..."`
+ * quote pairs and backslash-escapes, concatenating adjacent fragments the way
+ * a shell joins them — so `'.git/config'`, `".git"/config`, `'.git'/config`,
+ * and a plain `.git/config` all resolve to the same value.
+ *
+ * Without this, the segment-based checks below never see `.git` as its own
+ * path segment (`'.git/config'` splits into `'.git`, `config'`), which let a
+ * quoted path slip past the banned-folder / Makefile guards even though the
+ * shell writes to exactly the protected path. A lone/unbalanced quote is kept
+ * literally rather than dropped, erring toward matching more, not less.
+ */
+function unquoteArg(token: string): string {
+	let out = "";
+	let quote: "'" | '"' | null = null;
+	for (let i = 0; i < token.length; i++) {
+		const ch = token[i];
+		if (quote) {
+			if (ch === quote) quote = null;
+			else out += ch;
+			continue;
+		}
+		if (ch === "'" || ch === '"') {
+			quote = ch;
+			continue;
+		}
+		// Outside quotes a backslash escapes the next character (drops the slash,
+		// keeps the char literally). A trailing backslash has nothing to escape.
+		if (ch === "\\" && i + 1 < token.length) {
+			out += token[++i];
+			continue;
+		}
+		out += ch;
+	}
+	return out;
+}
+
+/**
  * Extract the path a command's argument actually refers to, or null if the
  * argument isn't path-shaped for that command. Most commands take bare
  * positional paths; `dd` instead takes `key=value` options, only some of
@@ -97,8 +135,11 @@ function findMatchingPathArg(
 	}
 	if (!FILE_MANIP_COMMANDS.has(name)) return null;
 	for (const arg of args) {
+		// Flags are never quoted, so test the raw token for the `-` skip; the
+		// path itself is unquoted first so a quoted `.git`/Makefile segment can't
+		// hide from the segment-based predicates (e.g. `rm '.git/config'`).
 		if (arg.startsWith("-")) continue;
-		const path = extractPathArg(name, arg);
+		const path = extractPathArg(name, unquoteArg(arg));
 		if (path && predicate(path)) return path;
 	}
 	return null;
