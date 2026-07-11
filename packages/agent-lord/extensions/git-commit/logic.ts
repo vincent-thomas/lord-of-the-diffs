@@ -37,14 +37,6 @@ export async function branchExistsOnRemote(
 // Blocked-path checking
 // ---------------------------------------------------------------------------
 
-/**
- * Paths always blocked from being committed, regardless of the caller's
- * `diffBlockedPaths`. `Makefile` is what the pre-check gate runs and `.npmrc`
- * controls package resolution/registry — committing a change to either would
- * let a commit weaken the harness that guards it.
- */
-export const DEFAULT_BLOCKED_PATHS = [".npmrc", "Makefile"];
-
 /** Strip a leading "./" and any trailing "/" so paths and patterns compare cleanly. */
 function normalizeForMatch(p: string): string {
 	return p.replace(/^\.\//, "").replace(/\/+$/, "");

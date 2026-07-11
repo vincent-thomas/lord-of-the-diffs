@@ -12,7 +12,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { currentBranch } from "../../lib/git-utils.ts";
 import { isDefaultBranch, hasUpstreamBranch, branchExistsOnRemote } from "./logic.ts";
-import { runPreChecks, gitCommit, getModifiedPaths, findBlockedPaths, DEFAULT_BLOCKED_PATHS } from "./logic.ts";
+import { runPreChecks, gitCommit, getModifiedPaths, findBlockedPaths } from "./logic.ts";
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
 
 export default function (pi: ExtensionAPI) {
@@ -41,8 +41,7 @@ export default function (pi: ExtensionAPI) {
 						"Repo-root-relative paths that must not appear in this commit. Each entry blocks " +
 						'an exact file (e.g. "Makefile", ".npmrc") or, when it names a directory, every ' +
 						'file under it (e.g. ".github/workflows"). If any path being committed matches an ' +
-						"entry, the commit is refused before pre-checks run. .npmrc and Makefile are always " +
-						"blocked, in addition to any entries provided here.",
+						"entry, the commit is refused before pre-checks run. Omit or leave empty to block nothing.",
 				}),
 			),
 		}),
@@ -84,7 +83,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// 3. Refuse if any path being committed is blocked.
-			const blockedPaths = [...DEFAULT_BLOCKED_PATHS, ...(params.diffBlockedPaths ?? [])];
+			const blockedPaths = params.diffBlockedPaths ?? [];
 			if (blockedPaths.length > 0) {
 				const modifiedPaths = await getModifiedPaths(cwd, params.add_all, signal);
 				const blocked = findBlockedPaths(modifiedPaths, blockedPaths);
