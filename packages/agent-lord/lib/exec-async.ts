@@ -15,6 +15,14 @@ interface ExecResult {
 	stderr: string;
 }
 
+/** Options accepted by execAsync and its read-only convenience wrappers. */
+export interface ExecOptions {
+	cwd?: string;
+	timeout?: number;
+	signal?: AbortSignal;
+	maxBuffer?: number;
+}
+
 // node:child_process.exec defaults maxBuffer to 1MB per stream (stdout,
 // stderr checked separately) and kills the child if either is exceeded —
 // not truncates, kills, so the caller gets nothing at all. Several callers
@@ -36,7 +44,7 @@ interface ExecError extends Error {
  */
 export function execAsync(
 	command: string,
-	options: { cwd?: string; timeout?: number; signal?: AbortSignal; maxBuffer?: number },
+	options: ExecOptions,
 ): Promise<ExecResult> {
 	if (options.signal?.aborted) {
 		return Promise.reject(
@@ -94,4 +102,41 @@ export function extractErrorOutput(err: unknown): string {
 		if (stdout) return stdout;
 	}
 	return String(err);
+}
+
+/**
+ * Run a read-only command and return its trimmed stdout, or null if the
+ * command fails or produces no output. The workhorse for the many
+ * "look something up, don't care why it failed" git/gh queries — collapses
+ * both a non-zero exit and empty output to null so callers get one uniform
+ * "no answer" signal instead of hand-rolling a try/catch each time.
+ */
+export async function tryExec(
+	command: string,
+	options: ExecOptions,
+): Promise<string | null> {
+	try {
+		const { stdout } = await execAsync(command, options);
+		return stdout.trim() || null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Run a command purely for its exit status: true if it exited 0, false if it
+ * failed. For probes like `git diff --cached --quiet` or
+ * `git merge-base --is-ancestor` whose whole answer is the exit code, not the
+ * output.
+ */
+export async function execSucceeds(
+	command: string,
+	options: ExecOptions,
+): Promise<boolean> {
+	try {
+		await execAsync(command, options);
+		return true;
+	} catch {
+		return false;
+	}
 }
