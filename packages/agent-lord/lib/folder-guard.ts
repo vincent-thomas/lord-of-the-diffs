@@ -1,11 +1,17 @@
 /**
- * folder-guard.ts — "does this path/command touch a protected folder?"
+ * folder-guard.ts — "does this path/command touch a protected path?"
  *
- * Shared by two independent extensions: folder-protector (blocks the write
- * and edit tools from targeting a protected path directly) and
- * command-policy (blocks any bash command whose args target a protected
- * path, via a CommandPolicyEntry using findBannedFolderPath as its
- * `command` predicate).
+ * Covers two kinds of protected path: banned *folders* (.git,
+ * node_modules, …) and the *Makefile*, which defines the project's
+ * validation contract (lib/precheck.ts runs `make` — and silently passes
+ * when no Makefile exists, so deleting or replacing it would neutralize
+ * every pre-check).
+ *
+ * Shared by independent extensions: folder-protector and write-guard
+ * (block the write/edit tools from targeting a protected path directly)
+ * and command-policy (blocks any bash command whose args target a
+ * protected path, via CommandPolicyEntries using findBannedFolderPath /
+ * findMakefilePath as their `command` predicates).
  *
  * No pi imports — importable from any extension's logic module.
  */
@@ -68,20 +74,71 @@ function extractPathArg(commandName: string, arg: string): string | null {
 }
 
 /**
- * Check a single resolved command invocation (name + args — the shape
- * shared by @vt-pi/command-policy's commandInvocation and CommandUse) for a
- * path targeting a banned folder. Returns the offending path, or null if
- * this invocation doesn't touch one.
+ * Scan a resolved command invocation (name + args — the shape shared by
+ * @vt-pi/command-policy's commandInvocation and CommandUse) for a path
+ * argument matching `predicate`. Returns the first offending path, or null
+ * if the invocation is not path-manipulating or no path arg matches.
+ *
+ * `git rm <path>` is included alongside FILE_MANIP_COMMANDS: it deletes the
+ * path (and stages the deletion) just like `rm`, and is otherwise allowed by
+ * the command policy. Other git subcommands don't take destructive path args
+ * the same way and are governed by their own policy entries.
+ */
+function findMatchingPathArg(
+	use: { name: string; args: string[] },
+	predicate: (path: string) => boolean,
+): string | null {
+	let name = use.name;
+	let args = use.args;
+	if (name === "git") {
+		if (args[0]?.toLowerCase() !== "rm") return null;
+		name = "rm";
+		args = args.slice(1);
+	}
+	if (!FILE_MANIP_COMMANDS.has(name)) return null;
+	for (const arg of args) {
+		if (arg.startsWith("-")) continue;
+		const path = extractPathArg(name, arg);
+		if (path && predicate(path)) return path;
+	}
+	return null;
+}
+
+/**
+ * Check a single resolved command invocation for a path targeting a banned
+ * folder. Returns the offending path, or null if this invocation doesn't
+ * touch one.
  */
 export function findBannedFolderPath(
 	use: { name: string; args: string[] },
 	bannedFolders: string[] = BANNED_FOLDERS,
 ): string | null {
-	if (!FILE_MANIP_COMMANDS.has(use.name)) return null;
-	for (const arg of use.args) {
-		if (arg.startsWith("-")) continue;
-		const path = extractPathArg(use.name, arg);
-		if (path && isPathInsideBannedFolder(path, bannedFolders)) return path;
-	}
-	return null;
+	return findMatchingPathArg(use, (path) => isPathInsideBannedFolder(path, bannedFolders));
+}
+
+// ---------------------------------------------------------------------------
+// Makefile protection
+// ---------------------------------------------------------------------------
+
+/** Returns the base filename from a path string. */
+export function baseName(p: string): string {
+	const idx = p.lastIndexOf("/");
+	return idx === -1 ? p : p.slice(idx + 1);
+}
+
+/** Returns true when the path's basename is a Makefile (case-insensitive). */
+export function isMakefile(filePath: string): boolean {
+	return baseName(filePath).toLowerCase() === "makefile";
+}
+
+/**
+ * Check a single resolved command invocation for a path argument that is a
+ * Makefile. Returns the offending path, or null if this invocation doesn't
+ * touch one. Catches deletion (`rm Makefile`, `git rm Makefile`),
+ * replacement (`mv other Makefile`, `cp other Makefile`), and creation
+ * (`touch Makefile`) — any of which would rewrite the validation contract
+ * that write-guard already protects from the write/edit tools.
+ */
+export function findMakefilePath(use: { name: string; args: string[] }): string | null {
+	return findMatchingPathArg(use, isMakefile);
 }
