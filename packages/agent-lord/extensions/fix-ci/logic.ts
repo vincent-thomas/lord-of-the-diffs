@@ -970,6 +970,28 @@ interface RawReview {
 	commit_id?: string;
 }
 
+/**
+ * Map raw `gh api` review JSON into Review objects.
+ *
+ * Pulled out from fetchPrReviews so the mapping is unit-testable without
+ * mocking `gh` — mirroring parseReviewComments. The `author ?? user` login
+ * fallback is the reason this matters: `gh api` (REST) returns the reviewer
+ * under `.user`, while `gh pr view`-style (GraphQL) output uses `.author`;
+ * getting that wrong silently labels every reviewer "unknown", which then
+ * breaks re-request-review and the changes-requested attribution downstream.
+ */
+export function parseReviews(raw: unknown): Review[] {
+	const reviews = raw as RawReview[];
+	return (Array.isArray(reviews) ? reviews : []).map((r) => ({
+		id: r.id,
+		author: (r.author ?? r.user)?.login ?? "unknown",
+		state: r.state ?? "UNKNOWN",
+		body: r.body ?? "",
+		submittedAt: r.submitted_at ?? "",
+		commitId: r.commit_id ?? null,
+	}));
+}
+
 async function fetchPrReviews(
 	cwd: string,
 	prNumber: number | null,
@@ -982,15 +1004,7 @@ async function fetchPrReviews(
 			{ cwd, timeout: 15_000, signal },
 		);
 		if (!stdout.trim()) return [];
-		const raw: RawReview[] = JSON.parse(stdout.trim());
-		return (Array.isArray(raw) ? raw : []).map((r) => ({
-			id: r.id,
-			author: (r.author ?? r.user)?.login ?? "unknown",
-			state: r.state ?? "UNKNOWN",
-			body: r.body ?? "",
-			submittedAt: r.submitted_at ?? "",
-			commitId: r.commit_id ?? null,
-		}));
+		return parseReviews(JSON.parse(stdout.trim()));
 	} catch {
 		return [];
 	}
