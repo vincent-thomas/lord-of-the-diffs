@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { execAsync, extractErrorOutput } from "./exec-async.ts";
+import { execAsync, execSucceeds, extractErrorOutput, tryExec } from "./exec-async.ts";
 
 suite("execAsync", () => {
 	test("resolves with stdout/stderr on success", async () => {
@@ -49,6 +49,41 @@ suite("execAsync", () => {
 				maxBuffer: 1024,
 			}),
 		);
+	});
+});
+
+suite("tryExec", () => {
+	test("returns trimmed stdout on success", async () => {
+		const out = await tryExec("node -e \"process.stdout.write('  hello  ')\"", {});
+		assert.equal(out, "hello");
+	});
+
+	test("returns null when the command succeeds but prints nothing", async () => {
+		assert.equal(await tryExec("node -e \"\"", {}), null);
+	});
+
+	test("returns null when the command fails", async () => {
+		assert.equal(await tryExec("node -e \"process.exit(1)\"", {}), null);
+	});
+
+	test("returns null (not the partial output) when a failing command still printed", async () => {
+		const out = await tryExec("node -e \"process.stdout.write('partial'); process.exit(1)\"", {});
+		assert.equal(out, null);
+	});
+});
+
+suite("execSucceeds", () => {
+	test("true when the command exits 0", async () => {
+		assert.equal(await execSucceeds("node -e \"process.exit(0)\"", {}), true);
+	});
+
+	test("false when the command exits non-zero", async () => {
+		assert.equal(await execSucceeds("node -e \"process.exit(1)\"", {}), false);
+	});
+
+	test("ignores output — only the exit status matters", async () => {
+		// Mirrors `git diff --cached --quiet`: no stdout, answer is the exit code.
+		assert.equal(await execSucceeds("node -e \"process.exit(0)\"", {}), true);
 	});
 });
 

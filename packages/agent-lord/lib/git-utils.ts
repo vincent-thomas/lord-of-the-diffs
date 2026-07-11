@@ -3,7 +3,7 @@
  *
  * No pi imports — importable from any extension's logic module.
  */
-import { execAsync } from "./exec-async.ts";
+import { execAsync, execSucceeds, tryExec } from "./exec-async.ts";
 
 // ---------------------------------------------------------------------------
 // Working tree checks
@@ -37,16 +37,7 @@ export async function isWorktreeDirty(
 
 /** Returns the current branch name, or null if not in a git repo. */
 export async function currentBranch(cwd: string, signal?: AbortSignal): Promise<string | null> {
-	try {
-		const { stdout } = await execAsync("git branch --show-current", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		return stdout.trim() || null;
-	} catch {
-		return null;
-	}
+	return tryExec("git branch --show-current", { cwd, timeout: 5_000, signal });
 }
 
 // ---------------------------------------------------------------------------
@@ -65,15 +56,10 @@ export function isDefaultBranch(branch: string): boolean {
  * Async — uses execAsync under the hood.
  */
 export async function hasUpstream(cwd: string, signal?: AbortSignal): Promise<boolean> {
-	try {
-		await execAsync("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
-			cwd,
-			timeout: 5_000,
-			signal,
-		});
-		return true;
-	} catch {
-		// Non-zero exit means no upstream is configured for this branch.
-		return false;
-	}
+	// Non-zero exit means no upstream is configured for this branch.
+	return execSucceeds("git rev-parse --abbrev-ref --symbolic-full-name @{u}", {
+		cwd,
+		timeout: 5_000,
+		signal,
+	});
 }
