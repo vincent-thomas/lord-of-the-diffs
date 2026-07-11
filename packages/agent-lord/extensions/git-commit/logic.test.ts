@@ -12,6 +12,7 @@ import {
 	pathMatchesBlocked,
 	findBlockedPaths,
 	getModifiedPaths,
+	DEFAULT_BLOCKED_PATHS,
 } from "./logic.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -283,4 +284,19 @@ suite("getModifiedPaths", () => {
 			assert.ok((await getModifiedPaths(dir, true)).includes("init.txt"));
 		}),
 	);
+});
+
+// ---------------------------------------------------------------------------
+// DEFAULT_BLOCKED_PATHS
+// ---------------------------------------------------------------------------
+
+suite("DEFAULT_BLOCKED_PATHS", () => {
+	test("always includes .npmrc and Makefile", () => {
+		assert.ok(DEFAULT_BLOCKED_PATHS.includes(".npmrc"));
+		assert.ok(DEFAULT_BLOCKED_PATHS.includes("Makefile"));
+	});
+	test("catches a Makefile change through findBlockedPaths", () =>
+		assert.deepEqual(findBlockedPaths(["src/a.ts", "Makefile"], DEFAULT_BLOCKED_PATHS), ["Makefile"]));
+	test("catches a .npmrc change through findBlockedPaths", () =>
+		assert.deepEqual(findBlockedPaths(["a.ts", ".npmrc"], DEFAULT_BLOCKED_PATHS), [".npmrc"]));
 });
