@@ -33,7 +33,7 @@ vt-pi/
     │   ├── extensions/         # One subdirectory per extension
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
     │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
-    │   │   ├── fix-ci/         # push_and_check_ci tool; blocks git push in bash
+    │   │   ├── fix-ci/         # Wires the push_and_check_ci tool from @vt-pi/fix-ci
     │   │   ├── git-commit/     # git_commit tool; blocks git commit in bash
     │   │   ├── no-file-writes/ # Blocks >, >> shell redirections to files
     │   │   ├── sandbox/        # /sandbox command for read-only mode
@@ -44,7 +44,8 @@ vt-pi/
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts
     │   └── skills/              # Skill definitions (populated at build time)
-    └── command-policy/          # @vt-pi/command-policy — shell command allow-list engine
+    ├── command-policy/          # @vt-pi/command-policy — shell command allow-list engine
+    └── fix-ci/                  # @vt-pi/fix-ci — push/CI-poll/review lifecycle for push_and_check_ci
 ```
 
 ## How extensions are structured
@@ -72,9 +73,9 @@ tree). Workspace-local dependencies (e.g. `@vt-pi/agent-lord`'s dependency on
 links them locally instead of trying to fetch them from the registry.
 Workspace members are plain TypeScript with no build step for anything
 consumed by *relative* import — Node's native type-stripping runs `.ts`
-files directly, both in `nix build` and via `node --test`. The three leaf
-`@vt-pi/*` packages (`command-policy`, `agent-advisor`, `agent-explorer`)
-are the exception: they're consumed from `agent-lord` by *package name*
+files directly, both in `nix build` and via `node --test`. The four leaf
+`@vt-pi/*` packages (`command-policy`, `agent-advisor`, `agent-explorer`,
+`fix-ci`) are the exception: they're consumed from `agent-lord` by *package name*
 through `node_modules`, and Node refuses to type-strip a `.ts` file whose
 real path resolves under any `node_modules` directory. So each has a
 `tsconfig.json` (extending the root `tsconfig.base.json`) and a `build: tsc`
@@ -133,7 +134,7 @@ importing across that boundary.
 install` against the root workspace (`fetchPnpmDeps` + `pnpmConfigHook`,
 mirroring the `buildNpmPackage` + `npmDepsHash` pattern `piBase` uses for its
 own deps) to resolve real external dependencies declared by any workspace
-package. It then builds the three `@vt-pi/*` leaf packages (`pnpm -r run
+package. It then builds the four `@vt-pi/*` leaf packages (`pnpm -r run
 build`, see above) and runs `pnpm --filter=@vt-pi/agent-lord deploy` to
 produce a self-contained `agent-lord/` tree: its own
 `extensions/lib/skills/AGENTS.md` alongside a `node_modules` where every

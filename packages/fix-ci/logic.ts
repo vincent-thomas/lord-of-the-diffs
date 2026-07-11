@@ -7,9 +7,9 @@
  * (which freezes the TUI). The abort signal is threaded through so Ctrl+C
  * kills child processes promptly.
  */
-import { execAsync, execSucceeds, extractErrorOutput, tryExec } from "../../lib/exec-async.ts";
-import { hasUpstream, currentBranch } from "../../lib/git-utils.ts";
-import { shellQuote } from "../../lib/shell-quote.ts";
+import { execAsync, execSucceeds, extractErrorOutput, tryExec } from "./exec-async.ts";
+import { hasUpstream, currentBranch } from "./git-utils.ts";
+import { shellQuote } from "./shell-quote.ts";
 
 // ---------------------------------------------------------------------------
 // Types

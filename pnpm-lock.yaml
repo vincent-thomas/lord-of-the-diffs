@@ -58,12 +58,28 @@ importers:
       '@vt-pi/command-policy':
         specifier: workspace:*
         version: link:../command-policy
+      '@vt-pi/fix-ci':
+        specifier: workspace:*
+        version: link:../fix-ci
 
   packages/command-policy:
     dependencies:
       '@mariozechner/pi-coding-agent':
         specifier: ^0.73.1
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/fix-ci:
+    dependencies:
+      '@mariozechner/pi-coding-agent':
+        specifier: ^0.73.1
+        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+      typebox:
+        specifier: ^1.1.24
+        version: 1.3.6
     devDependencies:
       typescript:
         specifier: ^7.0.2
