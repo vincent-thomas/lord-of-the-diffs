@@ -37,11 +37,12 @@ export default function (pi: ExtensionAPI) {
 			}),
 			diffBlockedPaths: Type.Optional(
 				Type.Array(Type.String(), {
+					default: [".npmrc", "Makefile"],
 					description:
 						"Repo-root-relative paths that must not appear in this commit. Each entry blocks " +
 						'an exact file (e.g. "Makefile", ".npmrc") or, when it names a directory, every ' +
 						'file under it (e.g. ".github/workflows"). If any path being committed matches an ' +
-						"entry, the commit is refused before pre-checks run. Omit or leave empty to block nothing.",
+						"entry, the commit is refused before pre-checks run. Defaults to .npmrc and Makefile; pass your own array to override, or [] to block nothing.",
 				}),
 			),
 		}),
@@ -83,7 +84,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			// 3. Refuse if any path being committed is blocked.
-			const blockedPaths = params.diffBlockedPaths ?? [];
+			const blockedPaths = params.diffBlockedPaths ?? [".npmrc", "Makefile"];
 			if (blockedPaths.length > 0) {
 				const modifiedPaths = await getModifiedPaths(cwd, params.add_all, signal);
 				const blocked = findBlockedPaths(modifiedPaths, blockedPaths);
