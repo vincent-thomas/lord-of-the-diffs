@@ -4,7 +4,12 @@
  */
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
-import { isPathInsideBannedFolder, findBannedFolderPath, BANNED_FOLDERS } from "./folder-guard.ts";
+import {
+	isPathInsideBannedFolder,
+	findBannedFolderPath,
+	findMakefilePath,
+	BANNED_FOLDERS,
+} from "./folder-guard.ts";
 
 suite("isPathInsideBannedFolder with .git in BANNED_FOLDERS");
 
@@ -132,4 +137,57 @@ test("returns null for file-manipulation on non-banned path", () => {
 
 test("returns null for benign commands", () => {
 	assert.equal(findBannedFolderPath(use("ls", ["-la"]), BANNED_FOLDERS), null);
+});
+
+test("detects git rm targeting a banned folder", () => {
+	assert.equal(findBannedFolderPath(use("git", ["rm", ".git/config"]), BANNED_FOLDERS), ".git/config");
+});
+
+suite("findMakefilePath — file-manipulation invocations targeting a Makefile");
+
+test("detects rm deleting the Makefile", () => {
+	assert.equal(findMakefilePath(use("rm", ["Makefile"])), "Makefile");
+	assert.equal(findMakefilePath(use("rm", ["-f", "Makefile"])), "Makefile");
+});
+
+test("detects git rm deleting the Makefile", () => {
+	assert.equal(findMakefilePath(use("git", ["rm", "Makefile"])), "Makefile");
+});
+
+test("detects mv replacing or renaming away the Makefile", () => {
+	assert.equal(findMakefilePath(use("mv", ["Makefile.new", "Makefile"])), "Makefile");
+	assert.equal(findMakefilePath(use("mv", ["Makefile", "/tmp/gone"])), "Makefile");
+});
+
+test("detects cp overwriting the Makefile", () => {
+	assert.equal(findMakefilePath(use("cp", ["other", "Makefile"])), "Makefile");
+});
+
+test("detects touch creating a Makefile", () => {
+	assert.equal(findMakefilePath(use("touch", ["Makefile"])), "Makefile");
+});
+
+test("detects dd writing to the Makefile via of=", () => {
+	assert.equal(findMakefilePath(use("dd", ["if=payload", "of=Makefile"])), "Makefile");
+});
+
+test("matches case-insensitively and in subdirectories", () => {
+	assert.equal(findMakefilePath(use("rm", ["makefile"])), "makefile");
+	assert.equal(findMakefilePath(use("rm", ["src/Makefile"])), "src/Makefile");
+});
+
+test("does not match Makefile-adjacent names", () => {
+	assert.equal(findMakefilePath(use("rm", ["Makefile.am"])), null);
+	assert.equal(findMakefilePath(use("rm", ["makefile.in"])), null);
+	assert.equal(findMakefilePath(use("rm", ["not-a-makefile"])), null);
+});
+
+test("returns null for non-file-manipulation commands", () => {
+	assert.equal(findMakefilePath(use("ls", ["Makefile"])), null);
+	assert.equal(findMakefilePath(use("wc", ["-l", "Makefile"])), null);
+});
+
+test("returns null for git subcommands other than rm", () => {
+	assert.equal(findMakefilePath(use("git", ["add", "Makefile"])), null);
+	assert.equal(findMakefilePath(use("git", ["restore", "Makefile"])), null);
 });

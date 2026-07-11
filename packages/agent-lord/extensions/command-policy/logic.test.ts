@@ -95,3 +95,31 @@ test("protected folder entry does not match unrelated commands or paths", () => 
 	assert.ok(!command(use("cp", ["file", "out/dir"])));
 	assert.ok(!command(use("rg", ["foo"])));
 });
+
+test("Makefile entry is checked ahead of the allowed rm/cp/mv/git rm entries", () => {
+	const makefileIndex = COMMAND_POLICY_ENTRIES.findIndex((e) => e.name === "Makefile");
+	assert.ok(makefileIndex >= 0);
+	assert.equal(COMMAND_POLICY_ENTRIES[makefileIndex].status, CommandPolicyStatus.Banned);
+	for (const name of ["rm", "cp", "mv", "git rm"]) {
+		const allowedIndex = COMMAND_POLICY_ENTRIES.findIndex((e) => e.name === name);
+		assert.ok(makefileIndex < allowedIndex, `Makefile entry must precede "${name}"`);
+	}
+});
+
+test("Makefile entry blocks shell commands that delete, replace, or create a Makefile", () => {
+	const command = findEntry("Makefile")!.command as (u: CommandUse) => boolean;
+	assert.ok(command(use("rm", ["Makefile"])));
+	assert.ok(command(use("rm", ["-f", "Makefile"])));
+	assert.ok(command(use("git", ["rm", "Makefile"])));
+	assert.ok(command(use("mv", ["Makefile.new", "Makefile"])));
+	assert.ok(command(use("cp", ["other", "src/Makefile"])));
+	assert.ok(command(use("touch", ["makefile"])));
+});
+
+test("Makefile entry does not match reads or unrelated paths", () => {
+	const command = findEntry("Makefile")!.command as (u: CommandUse) => boolean;
+	assert.ok(!command(use("head", ["Makefile"])));
+	assert.ok(!command(use("rm", ["file.txt"])));
+	assert.ok(!command(use("rm", ["Makefile.am"])));
+	assert.ok(!command(use("git", ["add", "Makefile"])));
+});

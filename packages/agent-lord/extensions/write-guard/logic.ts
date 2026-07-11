@@ -4,22 +4,13 @@
  * No pi imports — importable from the extension index and tests.
  */
 
+// Re-exports from lib so consumers (index.ts, tests) keep the same import
+// path. The Makefile check lives in lib/folder-guard.ts because the
+// command-policy extension enforces the same protection on bash commands.
+export { baseName, isMakefile } from "../../lib/folder-guard.ts";
+
 /** Maximum line count before write tool is blocked on existing files. */
 export const MAX_LINES = 50;
-
-/** Name of the Makefile (case-insensitive match target). */
-const MAKEFILE_NAME = "makefile";
-
-/** Returns the base filename from a path string. */
-export function baseName(p: string): string {
-	const idx = p.lastIndexOf("/");
-	return idx === -1 ? p : p.slice(idx + 1);
-}
-
-/** Returns true when the path's basename is a Makefile (case-insensitive). */
-export function isMakefile(filePath: string): boolean {
-	return baseName(filePath).toLowerCase() === MAKEFILE_NAME;
-}
 
 /**
  * Check an existing file's line count and return a block reason if the file

@@ -109,7 +109,8 @@ function readWord(command: string, start: number): { raw: string; value: string;
 }
 
 /**
- * Detects file write redirections: `> file` or `>> file`.
+ * Detects file write redirections: `> file`, `>> file`, and the no-space /
+ * `&>` forms (`cmd>file`, `cmd&>file`).
  * Excludes common non-file targets like /dev/null, /dev/stderr, /dev/stdout,
  * &1, &2 — including when quoted, since `> "/dev/null"` writes to the same
  * place as `> /dev/null`.
@@ -120,7 +121,11 @@ export function hasFileWriteRedirection(command: string): { found: boolean; segm
 	// \d* catches fd-prefixed redirects like 2>file and 1>>file.
 	// (?:>>|>(?!>)) prevents >> from backtracking to > and letting the
 	// second > leak into the target.
-	const operatorPattern = /(?:^|\s)\d*(?:>>|>(?!>))/g;
+	// Deliberately NOT anchored to preceding whitespace: bash recognizes a
+	// redirection wherever an unquoted `>` appears, so `echo hi>file`,
+	// `cat a>>b`, and `cmd &> file` all write files despite having no
+	// whitespace immediately before the operator.
+	const operatorPattern = /\d*(?:>>|>(?!>))/g;
 	const masked = maskQuotedSpans(command);
 
 	let match: RegExpExecArray | null;
