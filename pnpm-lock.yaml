@@ -17,6 +17,9 @@ importers:
       '@mariozechner/pi-coding-agent':
         specifier: ^0.73.1
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/agent-explorer':
+        specifier: workspace:*
+        version: link:../agent-explorer
       typebox:
         specifier: ^1.1.24
         version: 1.3.6
@@ -51,7 +54,7 @@ importers:
         version: file:packages/agent-advisor
       '@vt-pi/agent-explorer':
         specifier: workspace:*
-        version: file:packages/agent-explorer
+        version: file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)
       '@vt-pi/command-policy':
         specifier: workspace:*
         version: link:../command-policy
@@ -1468,6 +1471,7 @@ snapshots:
     dependencies:
       '@mariozechner/pi-ai': 0.73.1(ws@8.21.0)(zod@4.4.3)
       '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/agent-explorer': file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)
       typebox: 1.3.6
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -1478,7 +1482,7 @@ snapshots:
       - ws
       - zod
 
-  '@vt-pi/agent-explorer@file:packages/agent-explorer':
+  '@vt-pi/agent-explorer@file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)':
     dependencies:
       '@mariozechner/pi-ai': 0.73.1(ws@8.21.0)(zod@4.4.3)
       '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)

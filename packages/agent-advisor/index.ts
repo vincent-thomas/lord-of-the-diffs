@@ -10,12 +10,18 @@
  * kept off agent-lord's own turn loop so the frontier model's cost is paid
  * once on a bounded question instead of on every turn of a growing context.
  *
- * - tools allowlist restricts it to read/grep/find/ls — no write, edit, bash.
- *   The advisor can verify claims and inspect code itself rather than
- *   reasoning only over whatever agent-lord chose to paste into the query.
- * - resourceLoader has all discovery (extensions, skills, AGENTS.md, context
- *   files) turned off, so it never inherits agent-lord's own extensions,
- *   system prompt, or skills.
+ * - tools allowlist restricts it to read/grep/find/ls plus explore — no write,
+ *   edit, bash. The advisor can verify claims and inspect code itself rather
+ *   than reasoning only over whatever agent-lord chose to paste into the query.
+ * - it also gets its own `explore` tool (the agent-explorer extension, loaded
+ *   via extensionFactories) backed by a *cheaper* model. Broad, multi-file
+ *   searches go there so the raw grep/read churn is distilled by the cheap
+ *   model and never lands in this frontier session's context — while precise,
+ *   targeted reads it does directly. The prompt steers which to use.
+ * - resourceLoader has all disk discovery (extensions, skills, AGENTS.md,
+ *   context files) turned off, so it never inherits agent-lord's own
+ *   extensions, system prompt, or skills; only the explicitly injected explore
+ *   extension is loaded (extensionFactories run regardless of noExtensions).
  * - default model is a stronger/frontier one, independent of whatever model
  *   agent-lord itself is running — the whole point of consulting it.
  */
@@ -27,16 +33,24 @@ import {
 	type ExtensionAPI,
 } from "@mariozechner/pi-coding-agent";
 import { getModel, type Model } from "@mariozechner/pi-ai";
+import { createExploreExtension } from "@vt-pi/agent-explorer";
 import { Object as TObject, String as TString } from "typebox";
 import { buildAdvicePrompt, formatAdviceResult, hasExceededTurnLimit } from "./logic.ts";
 
 export interface AdvisorExtensionOptions {
 	/** Model for the nested advisory session. Default: a stronger/frontier model, independent of agent-lord's own. */
 	model?: Model<any>;
+	/**
+	 * Model for the `explore` sub-agent the advisor delegates broad searches to.
+	 * Default: agent-explorer's own cheap/fast default — keep it cheaper than
+	 * `model`, since the point is to keep raw search churn off this session.
+	 */
+	exploreModel?: Model<any>;
 }
 
 export function createAdvisorExtension(options: AdvisorExtensionOptions = {}) {
 	const model = options.model ?? getModel("anthropic", "claude-opus-4-8");
+	const exploreExtension = createExploreExtension(options.exploreModel ? { model: options.exploreModel } : {});
 
 	return function (pi: ExtensionAPI) {
 		pi.registerTool({
@@ -65,7 +79,10 @@ export function createAdvisorExtension(options: AdvisorExtensionOptions = {}) {
 				const resourceLoader = new DefaultResourceLoader({
 					cwd: ctx.cwd,
 					agentDir,
+					// noExtensions suppresses only disk discovery; the explicitly
+					// injected explore extension still loads.
 					noExtensions: true,
+					extensionFactories: [exploreExtension],
 					noSkills: true,
 					noPromptTemplates: true,
 					noThemes: true,
@@ -76,7 +93,7 @@ export function createAdvisorExtension(options: AdvisorExtensionOptions = {}) {
 					cwd: ctx.cwd,
 					agentDir,
 					model,
-					tools: ["read", "grep", "find", "ls"],
+					tools: ["read", "grep", "find", "ls", "explore"],
 					resourceLoader,
 					sessionManager: SessionManager.inMemory(ctx.cwd),
 				});

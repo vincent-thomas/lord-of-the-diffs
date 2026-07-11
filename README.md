@@ -115,6 +115,14 @@ once on a bounded question instead of on every turn of an already-large
 context. There's no automatic trigger; agent-lord decides when it's stuck
 and calls the tool itself.
 
+To keep that frontier session's context lean, the advisor also gets its own
+`explore` tool (the same agent-explorer extension, injected via the resource
+loader's `extensionFactories` so it loads even though disk discovery is off).
+The prompt steers it to delegate broad, multi-file searches to that cheaper
+sub-agent — the raw grep/read churn is distilled by the cheap model and never
+enters the frontier context — while it reads directly for the precise,
+targeted lookups where exact bytes matter.
+
 ### Sandbox (`packages/agent-lord/extensions/sandbox/`)
 
 A `/sandbox` command that puts the agent in read-only mode. In sandbox mode,

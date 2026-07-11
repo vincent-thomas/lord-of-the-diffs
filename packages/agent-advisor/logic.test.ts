@@ -9,6 +9,14 @@ test("buildAdvicePrompt embeds the query and states the read-only constraint", (
 	assert.match(prompt, /cannot write, edit, or run/i);
 });
 
+test("buildAdvicePrompt steers broad searches to explore and precise reads to read/grep", () => {
+	const prompt = buildAdvicePrompt("track down the source of the flaky test");
+	assert.match(prompt, /\bexplore\b/);
+	assert.match(prompt, /read\/grep\/find\/ls/);
+	// The delegation rationale — keep raw search churn out of this session.
+	assert.match(prompt, /distilled|churn/i);
+});
+
 test("formatAdviceResult returns the text unchanged when present", () => {
 	assert.equal(formatAdviceResult("Root cause: off-by-one in foo.ts:12"), "Root cause: off-by-one in foo.ts:12");
 });
