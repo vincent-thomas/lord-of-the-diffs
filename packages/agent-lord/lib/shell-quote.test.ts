@@ -23,6 +23,6 @@ test("neutralizes shell metacharacters when actually run by a shell", () => {
 });
 
 test("round-trips an empty string", () => {
-	const out = execSync(`echo -n ${shellQuote("")}`, { encoding: "utf-8" });
+	const out = execSync(`printf '%s' ${shellQuote("")}`, { encoding: "utf-8" });
 	assert.equal(out, "");
 });
