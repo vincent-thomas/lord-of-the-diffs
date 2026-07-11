@@ -34,6 +34,71 @@ export async function branchExistsOnRemote(
 }
 
 // ---------------------------------------------------------------------------
+// Blocked-path checking
+// ---------------------------------------------------------------------------
+
+/** Strip a leading "./" and any trailing "/" so paths and patterns compare cleanly. */
+function normalizeForMatch(p: string): string {
+	return p.replace(/^\.\//, "").replace(/\/+$/, "");
+}
+
+/**
+ * True when `modifiedPath` is covered by `pattern`. A pattern blocks a path
+ * when the path is exactly the pattern (a specific file, e.g. "Makefile") or
+ * lives underneath it (the pattern names a directory, e.g. ".github/workflows").
+ * Both are treated as repo-root-relative. Matching is on whole path segments, so
+ * "Makefile" does not match "Makefile.bak" and "pkg/a" does not match "pkg/ab".
+ */
+export function pathMatchesBlocked(modifiedPath: string, pattern: string): boolean {
+	const path = normalizeForMatch(modifiedPath);
+	const pat = normalizeForMatch(pattern);
+	if (!pat || !path) return false;
+	return path === pat || path.startsWith(`${pat}/`);
+}
+
+/**
+ * Return every path in `modifiedPaths` blocked by at least one entry in
+ * `blockedPaths`. An empty `blockedPaths` blocks nothing.
+ */
+export function findBlockedPaths(modifiedPaths: string[], blockedPaths: string[]): string[] {
+	if (blockedPaths.length === 0) return [];
+	return modifiedPaths.filter((p) => blockedPaths.some((b) => pathMatchesBlocked(p, b)));
+}
+
+/**
+ * List the repo-root-relative paths a commit would include, so they can be
+ * screened against a blocklist before committing.
+ *
+ * With `addAll` the set mirrors `git add -A` + commit — already-staged changes,
+ * plus unstaged modifications/deletions, plus untracked files — computed
+ * without actually staging anything. Without it, only what is already staged.
+ * Rename detection is disabled (`--no-renames`) so both the old and new path of
+ * a rename are reported; blocking either should block the commit.
+ */
+export async function getModifiedPaths(
+	cwd: string,
+	addAll: boolean,
+	signal?: AbortSignal,
+): Promise<string[]> {
+	const paths = new Set<string>();
+	const collect = (out: string | null) => {
+		if (!out) return;
+		for (const line of out.split("\n")) {
+			const trimmed = line.trim();
+			if (trimmed) paths.add(trimmed);
+		}
+	};
+
+	collect(await tryExec("git diff --cached --name-only --no-renames", { cwd, timeout: 10_000, signal }));
+	if (addAll) {
+		collect(await tryExec("git diff --name-only --no-renames", { cwd, timeout: 10_000, signal }));
+		collect(await tryExec("git ls-files --others --exclude-standard", { cwd, timeout: 10_000, signal }));
+	}
+
+	return [...paths];
+}
+
+// ---------------------------------------------------------------------------
 // Git commit
 // ---------------------------------------------------------------------------
 

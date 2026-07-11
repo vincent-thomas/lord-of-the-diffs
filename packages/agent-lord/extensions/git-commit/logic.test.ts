@@ -5,7 +5,14 @@
  */
 import assert from "node:assert/strict";
 import { test, suite } from "node:test";
-import { isDefaultBranch, gitCommit, branchExistsOnRemote } from "./logic.ts";
+import {
+	isDefaultBranch,
+	gitCommit,
+	branchExistsOnRemote,
+	pathMatchesBlocked,
+	findBlockedPaths,
+	getModifiedPaths,
+} from "./logic.ts";
 import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -190,6 +197,90 @@ suite("gitCommit", () => {
 			assert.equal(result.success, true);
 			const log = git("git log --oneline -1", dir);
 			assert.ok(log.includes("delete init"));
+		}),
+	);
+});
+
+// ---------------------------------------------------------------------------
+// pathMatchesBlocked
+// ---------------------------------------------------------------------------
+
+suite("pathMatchesBlocked", () => {
+	test("exact file path matches", () => assert.equal(pathMatchesBlocked("Makefile", "Makefile"), true));
+	test("unrelated file does not match", () => assert.equal(pathMatchesBlocked("src/app.ts", "Makefile"), false));
+	test("file under a blocked directory matches", () =>
+		assert.equal(pathMatchesBlocked("packages/agent-lord/x.ts", "packages/agent-lord"), true));
+	test("nested file under a blocked directory matches", () =>
+		assert.equal(pathMatchesBlocked(".github/workflows/ci.yml", ".github/workflows"), true));
+	test("trailing slash on a directory pattern is tolerated", () =>
+		assert.equal(pathMatchesBlocked("a/b.txt", "a/"), true));
+	test("leading ./ on the path is ignored", () =>
+		assert.equal(pathMatchesBlocked("./Makefile", "Makefile"), true));
+	test("leading ./ on the pattern is ignored", () =>
+		assert.equal(pathMatchesBlocked("Makefile", "./Makefile"), true));
+	test("partial segment does not match (Makefile vs Makefile.bak)", () =>
+		assert.equal(pathMatchesBlocked("Makefile.bak", "Makefile"), false));
+	test("a prefix that is not a path boundary does not match", () =>
+		assert.equal(pathMatchesBlocked("packages/agent-lord2/x", "packages/agent-lord"), false));
+	test("empty pattern matches nothing", () => assert.equal(pathMatchesBlocked("Makefile", ""), false));
+});
+
+// ---------------------------------------------------------------------------
+// findBlockedPaths
+// ---------------------------------------------------------------------------
+
+suite("findBlockedPaths", () => {
+	test("empty blocklist blocks nothing", () =>
+		assert.deepEqual(findBlockedPaths(["Makefile", "a.ts"], []), []));
+	test("returns only the paths that match", () =>
+		assert.deepEqual(
+			findBlockedPaths(["a.ts", "Makefile", ".npmrc"], ["Makefile", ".npmrc"]),
+			["Makefile", ".npmrc"],
+		));
+	test("no matches yields empty", () =>
+		assert.deepEqual(findBlockedPaths(["a.ts", "b.ts"], ["Makefile"]), []));
+	test("a directory pattern catches every file beneath it", () =>
+		assert.deepEqual(
+			findBlockedPaths(["src/a.ts", "src/b.ts", "x.ts"], ["src"]),
+			["src/a.ts", "src/b.ts"],
+		));
+});
+
+// ---------------------------------------------------------------------------
+// getModifiedPaths
+// ---------------------------------------------------------------------------
+
+suite("getModifiedPaths", () => {
+	test(
+		"add_all=false reports only staged paths",
+		withGitRepo(async (dir) => {
+			writeFileSync(join(dir, "staged.txt"), "s");
+			git("git add staged.txt", dir);
+			writeFileSync(join(dir, "untracked.txt"), "u");
+			writeFileSync(join(dir, "init.txt"), "changed"); // tracked, left unstaged
+			const paths = await getModifiedPaths(dir, false);
+			assert.deepEqual(paths.sort(), ["staged.txt"]);
+		}),
+	);
+
+	test(
+		"add_all=true reports staged, unstaged, and untracked paths",
+		withGitRepo(async (dir) => {
+			writeFileSync(join(dir, "staged.txt"), "s");
+			git("git add staged.txt", dir);
+			writeFileSync(join(dir, "untracked.txt"), "u");
+			writeFileSync(join(dir, "init.txt"), "changed");
+			const paths = await getModifiedPaths(dir, true);
+			assert.deepEqual(paths.sort(), ["init.txt", "staged.txt", "untracked.txt"]);
+		}),
+	);
+
+	test(
+		"an unstaged deletion is reported only under add_all=true",
+		withGitRepo(async (dir) => {
+			rmSync(join(dir, "init.txt"));
+			assert.deepEqual(await getModifiedPaths(dir, false), []);
+			assert.ok((await getModifiedPaths(dir, true)).includes("init.txt"));
 		}),
 	);
 });

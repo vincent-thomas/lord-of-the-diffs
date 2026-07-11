@@ -12,7 +12,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { currentBranch } from "../../lib/git-utils.ts";
 import { isDefaultBranch, hasUpstreamBranch, branchExistsOnRemote } from "./logic.ts";
-import { runPreChecks, gitCommit } from "./logic.ts";
+import { runPreChecks, gitCommit, getModifiedPaths, findBlockedPaths } from "./logic.ts";
 import { execAsync, extractErrorOutput } from "../../lib/exec-async.ts";
 
 export default function (pi: ExtensionAPI) {
@@ -35,6 +35,15 @@ export default function (pi: ExtensionAPI) {
 					"Auto-stage all changes (`git add -A`) before committing. " +
 					"Set to true for quick checkpoints where you want everything changed to be included.",
 			}),
+			diffBlockedPaths: Type.Optional(
+				Type.Array(Type.String(), {
+					description:
+						"Repo-root-relative paths that must not appear in this commit. Each entry blocks " +
+						'an exact file (e.g. "Makefile", ".npmrc") or, when it names a directory, every ' +
+						'file under it (e.g. ".github/workflows"). If any path being committed matches an ' +
+						"entry, the commit is refused before pre-checks run. Omit or leave empty to block nothing.",
+				}),
+			),
 		}),
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -73,7 +82,27 @@ export default function (pi: ExtensionAPI) {
 				}
 			}
 
-			// 3. Pre-commit checks.
+			// 3. Refuse if any path being committed is blocked.
+			const blockedPaths = params.diffBlockedPaths ?? [];
+			if (blockedPaths.length > 0) {
+				const modifiedPaths = await getModifiedPaths(cwd, params.add_all, signal);
+				const blocked = findBlockedPaths(modifiedPaths, blockedPaths);
+				if (blocked.length > 0) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text:
+									`Commit refused — it would modify path(s) blocked by \`diffBlockedPaths\`:\n` +
+									blocked.map((path) => `  - ${path}`).join("\n") +
+									`\n\nUnstage or revert these before committing.`,
+							},
+						],
+					};
+				}
+			}
+
+			// 4. Pre-commit checks.
 			const completedSteps: string[] = [];
 			onUpdate?.({
 				content: [{ type: "text", text: "Running pre-commit checks…" }],
@@ -107,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 				};
 			}
 
-			// 4. Auto-stage if add_all is set.
+			// 5. Auto-stage if add_all is set.
 			if (params.add_all) {
 				completedSteps.push("📦 Staging all changes…");
 				onUpdate?.({
@@ -128,7 +157,7 @@ export default function (pi: ExtensionAPI) {
 				}
 			}
 
-			// 5. Commit.
+			// 6. Commit.
 			completedSteps.push("Committing…");
 			onUpdate?.({
 				content: [{ type: "text", text: completedSteps.join("\n") }],
