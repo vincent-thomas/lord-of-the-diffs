@@ -82,8 +82,8 @@ export const COMMAND_POLICY_ENTRIES: CommandPolicyEntry[] = [
 	{ name: "test", status: CommandPolicyStatus.Allowed, command: "test" },
 	{ name: "mkdir", status: CommandPolicyStatus.Allowed, command: "mkdir" },
 	{ name: "rm", status: CommandPolicyStatus.Allowed, command: "rm", bannedFlags: ["-r", "-R", "-rf", "-fr", "--recursive"] },
-	{ name: "cp", status: CommandPolicyStatus.Allowed, command: "cp", bannedFlags: ["-r", "-R", "--recursive", "-a", "--archive"] },
-	{ name: "mv", status: CommandPolicyStatus.Allowed, command: "mv" },
+	{ name: "cp", status: CommandPolicyStatus.Allowed, command: "cp", bannedFlags: ["-r", "-R", "--recursive", "-a", "--archive", "-t", "--target-directory"] },
+	{ name: "mv", status: CommandPolicyStatus.Allowed, command: "mv", bannedFlags: ["-t", "--target-directory"] },
 	{ name: "chmod", status: CommandPolicyStatus.Allowed, command: "chmod", bannedFlags: ["-R", "--recursive"] },
 	{ name: "nix", status: CommandPolicyStatus.Allowed, command: "nix", subcommand: [["build"], ["flake", "check"], ["log"]] },
 	{

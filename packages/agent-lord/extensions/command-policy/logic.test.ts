@@ -72,6 +72,13 @@ test("cp bans -a/--archive, not just -r/-R/--recursive — archive mode also cop
 	assert.ok(findEntry("cp")?.bannedFlags?.includes("--archive"));
 });
 
+test("cp and mv ban -t/--target-directory, which reroute the write destination behind a flag", () => {
+	assert.ok(findEntry("cp")?.bannedFlags?.includes("-t"));
+	assert.ok(findEntry("cp")?.bannedFlags?.includes("--target-directory"));
+	assert.ok(findEntry("mv")?.bannedFlags?.includes("-t"));
+	assert.ok(findEntry("mv")?.bannedFlags?.includes("--target-directory"));
+});
+
 test("supports allowed flags per allowed entry", () => {
 	assert.ok(findEntry("git status")?.allowedFlags?.includes("--short"));
 	assert.equal(findEntry("git status")?.bannedFlags, undefined);
