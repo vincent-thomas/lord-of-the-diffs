@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@mariozechner/pi-coding-agent": "^0.73.1",
 		"@mariozechner/pi-ai": "^0.73.1",
+		"@vt-pi/agent-explorer": "workspace:*",
 		"typebox": "^1.1.24"
 	},
 	"devDependencies": {
