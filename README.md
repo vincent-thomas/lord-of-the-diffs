@@ -151,14 +151,12 @@ vt-pi/
     │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
     │   │   ├── explore/        # Wires the explore tool into @vt-pi/agent-explorer
     │   │   ├── fix-ci/         # push_and_check_ci tool
-    │   │   ├── folder-protector/ # Blocks write/edit on protected folders (e.g. .git/)
     │   │   ├── git-commit/     # git_commit tool
     │   │   ├── no-file-writes/ # Blocks >/>> in bash
     │   │   ├── sandbox/        # /sandbox read-only mode
-    │   │   └── write-guard/    # Blocks write on large/guarded files
+    │   │   └── write-guard/    # Blocks write on large existing files
     │   ├── lib/                # Pure logic, no Pi SDK imports
     │   │   ├── exec-async.ts
-    │   │   ├── folder-guard.ts
     │   │   ├── git-utils.ts
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts

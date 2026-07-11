@@ -4,56 +4,7 @@
 
 import { test, suite } from "node:test";
 import assert from "node:assert/strict";
-import { baseName, isMakefile, checkFileTooLarge, makefileBlockReason, MAX_LINES } from "./logic.ts";
-
-suite("write-guard — baseName");
-
-const baseNameCases = [
-	["file.txt", "file.txt"],
-	["path/to/file.txt", "file.txt"],
-	["/absolute/path/file.txt", "file.txt"],
-	["no-ext", "no-ext"],
-	["relative/", ""],
-	["/", ""],
-	["", ""],
-] as const;
-
-for (const [input, expected] of baseNameCases) {
-	test(`baseName("${input}") → "${expected}"`, () => {
-		assert.equal(baseName(input), expected);
-	});
-}
-
-suite("write-guard — isMakefile");
-
-const makefileMatches = [
-	"Makefile",
-	"makefile",
-	"MAKEFILE",
-	"MaKeFiLe",
-	"path/to/Makefile",
-	"/root/Makefile",
-] as const;
-
-for (const path of makefileMatches) {
-	test(`isMakefile("${path}") → true`, () => {
-		assert.ok(isMakefile(path));
-	});
-}
-
-const makefileNonMatches = [
-	"Makefile.am",
-	"makefile.in",
-	"src/main.rs",
-	"readme.md",
-	"path/to/not-a-makefile",
-] as const;
-
-for (const path of makefileNonMatches) {
-	test(`isMakefile("${path}") → false`, () => {
-		assert.ok(!isMakefile(path));
-	});
-}
+import { checkFileTooLarge, MAX_LINES } from "./logic.ts";
 
 suite("write-guard — checkFileTooLarge");
 
@@ -88,22 +39,6 @@ test("uses default MAX_LINES when no threshold provided", () => {
 	const reason = checkFileTooLarge("large.txt", content);
 	assert.ok(reason !== null);
 	assert.ok(reason!.includes(`${MAX_LINES + 1} lines`));
-});
-
-suite("write-guard — makefileBlockReason");
-
-test("includes tool type and file path in reason", () => {
-	const reason = makefileBlockReason("write", "path/to/Makefile");
-	assert.ok(reason.includes("write"));
-	assert.ok(reason.includes("path/to/Makefile"));
-	assert.ok(reason.includes("Makefile"));
-	assert.ok(reason.includes("validation contract"));
-});
-
-test("works with edit tool type", () => {
-	const reason = makefileBlockReason("edit", "Makefile");
-	assert.ok(reason.includes("edit"));
-	assert.ok(reason.includes("Makefile"));
 });
 
 suite("write-guard — MAX_LINES constant");
