@@ -241,36 +241,37 @@ export function createFixCiExtension() {
 
           // Pin all subsequent checks to the exact commit we just pushed.
           pushedSha = (await getHeadSha(cwd, signal)) ?? undefined;
-
-          // ── Create draft PR if none exists ──────────────────────────
-          const existingPr = await detectPrNumber(cwd, signal);
-          if (!existingPr) {
-            notify("Creating draft pull request…");
-
-            // Generate PR body from commit messages.
-            const prBody = await generatePrBody(cwd, signal);
-
-            // Use provided title or auto-generate from the branch name.
-            const prTitle = await generatePrTitle(cwd, signal);
-
-            const prResult = await createDraftPr(cwd, prTitle, prBody, signal);
-
-            if (!prResult.success) {
-              return respond(
-                `Draft PR creation failed. The push succeeded but the PR ` +
-                  `could not be created.\n\n\`\`\`\n${prResult.output}\n\`\`\``,
-                { prCreationFailed: true, output: prResult.output },
-              );
-            }
-
-            const prUrl = prResult.url ? prResult.url : "(see gh output)";
-            notify(`Draft PR created: ${prUrl}`);
-          } else {
-            notify(`PR #${existingPr} already exists — skipping creation.`);
-          }
         } else {
           notify("Nothing to push — checking CI for current HEAD…");
           pushedSha = (await getHeadSha(cwd, signal)) ?? undefined;
+        }
+
+        // ── Create draft PR if none exists ────────────────────────────
+        // Runs whether or not we pushed: a branch already on origin (e.g.
+        // pushed manually) should still get a PR opened if it lacks one.
+        const existingPr = await detectPrNumber(cwd, signal);
+        if (!existingPr) {
+          notify("Creating draft pull request…");
+
+          // Generate PR body from commit messages.
+          const prBody = await generatePrBody(cwd, signal);
+
+          // Use provided title or auto-generate from the branch name.
+          const prTitle = await generatePrTitle(cwd, signal);
+
+          const prResult = await createDraftPr(cwd, prTitle, prBody, signal);
+
+          if (!prResult.success) {
+            return respond(
+              `Draft PR creation failed:\n\n\`\`\`\n${prResult.output}\n\`\`\``,
+              { prCreationFailed: true, output: prResult.output },
+            );
+          }
+
+          const prUrl = prResult.url ? prResult.url : "(see gh output)";
+          notify(`Draft PR created: ${prUrl}`);
+        } else {
+          notify(`PR #${existingPr} already exists — skipping creation.`);
         }
 
         const cycle = cycleCount;
