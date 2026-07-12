@@ -323,6 +323,12 @@
             # no symlinks back into this build's own (different) tree.
             pnpm --reporter=append-only --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
 
+            # Deploy @vt-pi/agent-planner as its own self-contained standalone
+            # agent tree (its AGENTS.md + extensions + a node_modules with
+            # @vt-pi/agent-explorer materialized) — the `planner` binary below
+            # is built from this, independent of agent-lord's tree.
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-planner deploy $out/agent-planner
+
             runHook postInstall
           '';
         };
@@ -337,16 +343,28 @@
             chmod -R u+w $out
           '';
 
-        # ── 3. Final Pi package (base + customizations) ───────────────────────
-        pi =
-          pkgs.runCommand "pi-with-customizations"
+        # ── 3. Agent binaries (base + a deployed customization tree) ──────────
+        # One builder for every specialist pi instance. Each takes a
+        # self-contained agent tree (extensions + AGENTS.md + node_modules,
+        # optionally lib/skills) deployed by workspaceDeps, loads its
+        # extensions and skills, and appends its own AGENTS.md as the system
+        # prompt. `toolFlags` lets an agent restrict the toolset — e.g. the
+        # planner runs read-only.
+        mkPiAgent =
+          {
+            name,
+            tree,
+            description,
+            toolFlags ? "",
+          }:
+          pkgs.runCommand name
             {
               nativeBuildInputs = [ pkgs.makeWrapper ];
               passthru = {
                 inherit piBase piCustomizations;
               };
               meta = piBase.meta // {
-                description = "Pi coding agent with custom extensions and configuration";
+                inherit description;
               };
             }
             ''
@@ -354,20 +372,23 @@
               cp -r ${piBase} $out
               chmod -R u+w $out
 
-              # Add customizations to share/pi/
+              # Add this agent's customization tree to share/pi/. lib/ and
+              # skills/ are optional — a minimal agent (e.g. planner) has
+              # neither.
               mkdir -p $out/share/pi
-              cp -r ${piCustomizations}/extensions $out/share/pi/extensions
-              cp -r ${piCustomizations}/lib $out/share/pi/lib
-              cp -r ${piCustomizations}/skills $out/share/pi/skills
-              cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+              cp -r ${tree}/extensions $out/share/pi/extensions
+              if [ -d ${tree}/lib ]; then cp -r ${tree}/lib $out/share/pi/lib; fi
+              if [ -d ${tree}/skills ]; then cp -r ${tree}/skills $out/share/pi/skills; fi
+              cp ${tree}/AGENTS.md $out/share/pi/AGENTS.md
 
               # Same node_modules (real deps + @vt-pi/* deployed packages) as
-              # piCustomizations, so extensions can resolve them at runtime too.
-              cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
+              # the tree, so extensions can resolve them at runtime too.
+              cp -r ${tree}/node_modules $out/share/pi/node_modules
               chmod -R u+w $out/share/pi/node_modules
 
               # Build --extension / --skill flags for every bundled item.
               # Skip test files (*.test.ts) - they're for build-time validation only.
+              shopt -s nullglob
               extra_flags=""
               for ext in $out/share/pi/extensions/*; do
                 case "$(basename "$ext")" in
@@ -391,13 +412,31 @@
                 --run 'export LOTD_CONFIG_FILE="$(cd "$(dirname "$LOTD_CONFIG_FILE")" && pwd)/$(basename "$LOTD_CONFIG_FILE")"' \
                 --prefix PATH : ${git}/bin \
                 --prefix PATH : ${gh}/bin \
-                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags ${toolFlags} --append-system-prompt $out/share/pi/AGENTS.md"
             '';
+
+        # The code-writer (default). Full toolset, agent-lord's extensions.
+        pi = mkPiAgent {
+          name = "pi-with-customizations";
+          tree = piCustomizations;
+          description = "Pi coding agent with custom extensions and configuration";
+        };
+
+        # The planner. Read-only: --tools restricts to read/grep/find/ls plus
+        # the `explore` custom tool (the allowlist filters extension tools too),
+        # so there is no write/edit/bash — it decomposes, never implements.
+        planner = mkPiAgent {
+          name = "pi-planner";
+          tree = "${workspaceDeps}/agent-planner";
+          description = "Pi planner agent — read-only decomposition of a feature request into single-piece tasks";
+          toolFlags = "--tools read,grep,find,ls,explore";
+        };
       in
       {
         packages = {
           default = pi;
           pi = pi;
+          planner = planner;
           piBase = piBase;
           piCustomizations = piCustomizations;
           lotd-credential-helper = lotdCredentialHelper;
@@ -413,6 +452,10 @@
         apps.pi = {
           type = "app";
           program = "${pi}/bin/pi";
+        };
+        apps.planner = {
+          type = "app";
+          program = "${planner}/bin/pi";
         };
       }
     );

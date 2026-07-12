@@ -3,23 +3,7 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"default": "./dist/index.js"
-		}
-	},
-	"scripts": {
-		"build": "tsc",
-		"test": "node --test"
-	},
 	"dependencies": {
-		"@mariozechner/pi-coding-agent": "^0.73.1",
-		"@mariozechner/pi-ai": "^0.73.1",
-		"@vt-pi/agent-explorer": "workspace:*",
-		"typebox": "^1.1.24"
-	},
-	"devDependencies": {
-		"typescript": "^7.0.2"
+		"@vt-pi/agent-explorer": "workspace:*"
 	}
 }
