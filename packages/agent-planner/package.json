@@ -3,7 +3,11 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
+	"scripts": {
+		"test": "node --test"
+	},
 	"dependencies": {
-		"@vt-pi/agent-explorer": "workspace:*"
+		"@vt-pi/agent-explorer": "workspace:*",
+		"typebox": "^1.1.24"
 	}
 }

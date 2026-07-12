@@ -429,7 +429,7 @@
           name = "pi-planner";
           tree = "${workspaceDeps}/agent-planner";
           description = "Pi planner agent — read-only decomposition of a feature request into single-piece tasks";
-          toolFlags = "--tools read,grep,find,ls,explore";
+          toolFlags = "--tools read,grep,find,ls,explore,submit_plan";
         };
       in
       {
