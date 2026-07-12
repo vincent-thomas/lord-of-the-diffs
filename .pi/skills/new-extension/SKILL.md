@@ -1,13 +1,18 @@
 ---
 name: new-extension
-description: "Scaffold a new Pi extension in the vt-pi repo with the standard layout: index.ts, logic.ts, logic.test.ts, and shared lib imports from ../../lib/. Use when adding a new extension under packages/agent-lord/extensions/."
+description: "Scaffold a new Pi extension in the vt-pi repo. Non-trivial extensions use a directory with index.ts, logic.ts, logic.test.ts, and shared lib imports from ../../lib/; simple extensions may be a single .ts file. Use when adding a new extension under packages/agent-lord/extensions/."
 ---
 
 # new-extension
 
-Scaffold a new extension in `packages/agent-lord/extensions/<name>/` following vt-pi conventions.
+Scaffold a new extension under `packages/agent-lord/extensions/` following vt-pi conventions.
 
-## File layout
+Extensions come in two shapes and the flake picks up both:
+
+- **Single-file extensions** — a `<name>.ts` directly under `extensions/` (e.g. `advisor.ts`, `explore.ts`, `fix-ci.ts`). Good for small extensions that don't warrant separate pure-logic and test files.
+- **Directory extensions** — `extensions/<name>/` with an `index.ts` entry point (e.g. `command-policy/`, `git-commit/`, `no-file-writes/`, `write-guard/`). Preferred for anything non-trivial so pure logic can live in `logic.ts` and be unit-tested.
+
+## Recommended file layout (directory extension)
 
 ```
 packages/agent-lord/extensions/<name>/
@@ -15,6 +20,8 @@ packages/agent-lord/extensions/<name>/
 ├── logic.ts         # Pure logic — no Pi imports, testable, import from ../../lib/
 └── logic.test.ts    # Tests alongside the logic file
 ```
+
+A single-file extension is just the `index.ts` contents inlined as `extensions/<name>.ts`; skip it only when there's no meaningful logic to test in isolation.
 
 ## index.ts
 
@@ -127,7 +134,7 @@ test("returns expected value", () => {
 
 ## No manual registration needed
 
-The flake auto-discovers all directories under `packages/agent-lord/extensions/` and generates `--extension` flags for them. Test files (`*.test.ts`) are skipped automatically.
+The flake auto-discovers every entry directly under `packages/agent-lord/extensions/` — both single `.ts` files (e.g. `advisor.ts`) and subdirectories (e.g. `command-policy/`) — and generates a `--extension` flag for each. Test files (`*.test.ts`) sitting directly under `extensions/` are skipped automatically; tests nested inside a directory extension (like `<name>/logic.test.ts`) are invisible to the discovery loop because it only passes the directory itself to `--extension`.
 
 ## Adding shared code
 
