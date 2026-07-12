@@ -145,21 +145,50 @@ async function main() {
 
   // Track if committed
   let hasCommitted = false;
+  let turnCount = 0;
+
+  let hasThinkingOutput = false;
+
   const unsubscribe = session.subscribe((event) => {
-    if (
-      event.type === "tool_call_end" &&
-      event.toolCall.name === "commit_task"
-    ) {
-      hasCommitted = true;
-      console.log("\n✓ Task committed. Stopping agent...");
-      // Give a moment for the tool result to be processed, then abort
-      setTimeout(() => void session.abort(), 500);
+    if (event.type === "turn_start") {
+      turnCount++;
+      hasThinkingOutput = false;
     }
 
-    // Safety: stop after 30 turns
-    if (event.type === "turn_end" && event.turnNumber > 30) {
-      console.log("\n⚠ Turn limit exceeded (30). Stopping agent...");
-      void session.abort();
+    // Show thinking deltas in real-time
+    if (event.type === "message_update") {
+      const msgEvent = (event as any).assistantMessageEvent;
+      if (msgEvent?.type === "thinking_delta") {
+        process.stdout.write(msgEvent.delta);
+        hasThinkingOutput = true;
+      }
+    }
+
+    if (event.type === "tool_execution_start") {
+      // Add newline if there was thinking output before tools
+      if (hasThinkingOutput) {
+        console.log();
+        hasThinkingOutput = false;
+      }
+      console.log(`  → ${event.toolName}`);
+    }
+
+    if (event.type === "tool_execution_end") {
+      console.log(`  ✓ ${event.toolName}`);
+
+      if (event.toolName === "commit_task") {
+        hasCommitted = true;
+        console.log("\n✅ Task committed. Stopping agent...");
+        setTimeout(() => void session.abort(), 500);
+      }
+    }
+
+    if (event.type === "turn_end") {
+      // Safety: stop after 30 turns
+      if (turnCount > 30) {
+        console.log("\n⚠ Turn limit exceeded (30). Stopping agent...");
+        void session.abort();
+      }
     }
   });
 
