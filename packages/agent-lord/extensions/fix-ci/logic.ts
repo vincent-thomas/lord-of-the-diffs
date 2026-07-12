@@ -128,9 +128,8 @@ export async function getHeadSha(cwd: string, signal?: AbortSignal): Promise<str
  * push is needed) on error since the caller uses this to decide whether to
  * attempt a push at all.
  *
- * Not the same check as commit-enforcer/logic.ts's `hasUnpushedCommits`,
- * which compares against the local `@{u}` tracking ref and fails closed —
- * that one is a soft nag before yielding, this one gates an actual push.
+ * This one gates an actual push, so it compares against the remote SHA
+ * directly and fails open rather than trusting local tracking config.
  */
 export async function needsPush(
 	cwd: string,

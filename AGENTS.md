@@ -32,7 +32,6 @@ vt-pi/
     │   ├── AGENTS.md           # System prompt shipped with the binary
     │   ├── extensions/         # One subdirectory per extension
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
-    │   │   ├── commit-enforcer/# Nags the agent to commit/push before yielding
     │   │   ├── fix-ci/         # push_and_check_ci tool; blocks git push in bash
     │   │   ├── git-commit/     # git_commit tool; blocks git commit in bash
     │   │   ├── no-file-writes/ # Blocks >, >> shell redirections to files
