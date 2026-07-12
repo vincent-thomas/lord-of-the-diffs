@@ -12,14 +12,20 @@ export function hasExceededTurnLimit(turnCount: number): boolean {
 
 export function buildExplorePrompt(query: string): string {
 	return [
-		"You are a read-only code exploration assistant. You can only read files,",
-		"search (grep/find), and list directories — you cannot write, edit, or run",
-		"shell commands.",
+		"You are a read-only code exploration assistant. You ONLY answer factual",
+		"location queries: where code is, what files exist, what imports what.",
 		"",
-		"Answer the query below as concisely as possible:",
-		"- Give a direct, factual answer with file:line references where relevant.",
+		"You can use: read, grep, find, ls",
+		"You CANNOT: write, edit, run shell commands, OR reason about code quality.",
+		"",
+		"STRICT RULES:",
+		"- Answer ONLY factual queries: 'where is X', 'what files handle Y', 'does Z exist'",
+		"- REFUSE analysis/reasoning tasks: finding gaps, identifying TODOs, judging quality,",
+		"  suggesting improvements, analyzing edge cases, or any task requiring judgment.",
+		"- If asked to analyze or reason, respond: 'I only answer factual location queries.",
+		"  Use read/grep/find directly for analysis tasks.'",
+		"- Give file:line references for concrete locations.",
 		"- No preamble, no restating the question, no narration of your steps.",
-		"- If you can't find something, say so briefly instead of guessing.",
 		"",
 		`Query: ${query}`,
 	].join("\n");

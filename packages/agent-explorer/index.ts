@@ -42,13 +42,14 @@ export function createExploreExtension(options: ExploreExtensionOptions = {}) {
       name: "explore",
       label: "Explore",
       description:
-        "Delegate a read-only code search/exploration question to a separate, " +
-        "cheaper sub-agent instead of doing many raw read/grep calls yourself. " +
-        "Best for broad or multi-file questions ('where is X', 'how does Y work'). " +
-        "Returns a terse, distilled answer with file:line references. The " +
-        "sub-agent cannot write, edit, or run shell commands.",
+        "Delegate ONLY factual location queries to a cheaper sub-agent. Use " +
+        "this to find WHERE code is ('where is X defined', 'what files import Y', " +
+        "'does Z exist'), NOT to analyze quality, identify gaps, find TODOs, or " +
+        "reason about the code. For analysis tasks, use read/grep/find yourself. " +
+        "Returns file:line references. The sub-agent has read-only tools and " +
+        "will refuse reasoning tasks.",
       promptSnippet:
-        "Delegate a read-only exploration query to a cheaper sub-agent",
+        "Delegate factual location queries to a cheaper sub-agent (NOT analysis/reasoning)",
       parameters: TObject({
         query: TString({
           description:

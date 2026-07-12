@@ -1,0 +1,23 @@
+{
+  "name": "@vt-pi/agent-coder",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hyper-specialized agent for implementing a single plan task",
+  "bin": {
+    "agent-coder": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "tsc"
+  }
+}

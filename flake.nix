@@ -255,7 +255,7 @@
             src = ./.;
             inherit pnpm;
             fetcherVersion = 4;
-            hash = "sha256-o/hjmTOxdir4MMvL9Qq6f1pP2OWN+h0GK7q6ksliYRc=";
+            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
           };
 
           # git is needed on PATH for the checkPhase below — several tests
@@ -328,6 +328,11 @@
             # @vt-pi/agent-explorer materialized) — the `planner` binary below
             # is built from this, independent of agent-lord's tree.
             pnpm --reporter=append-only --offline --filter=@vt-pi/agent-planner deploy $out/agent-planner
+
+            # Deploy @vt-pi/agent-coder as its own self-contained CLI tree
+            # (its AGENTS.md + extensions + a node_modules with dependencies
+            # materialized) — the `coder` binary below is built from this.
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-coder deploy $out/agent-coder
 
             runHook postInstall
           '';
@@ -431,12 +436,44 @@
           description = "Pi planner agent — read-only decomposition of a feature request into single-piece tasks";
           toolFlags = "--tools read,grep,find,ls,explore,submit_plan";
         };
+
+        # The code-writer. Standalone CLI that implements a single plan task.
+        # Unlike pi/planner (which wrap the upstream pi CLI), this is its own
+        # agent binary built from agent-coder/index.ts.
+        coder = pkgs.stdenv.mkDerivation {
+          pname = "agent-coder";
+          version = "0.1.0";
+
+          src = "${workspaceDeps}/agent-coder";
+
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+
+          installPhase = ''
+            runHook preInstall
+
+            mkdir -p $out/lib/agent-coder
+            cp -r . $out/lib/agent-coder/
+
+            # Create wrapper for the CLI
+            mkdir -p $out/bin
+            makeWrapper "${nodejs}/bin/node" "$out/bin/agent-coder" \
+              --add-flags "$out/lib/agent-coder/dist/index.js"
+
+            runHook postInstall
+          '';
+
+          meta = {
+            description = "Hyper-specialized agent for implementing a single plan task";
+            mainProgram = "agent-coder";
+          };
+        };
       in
       {
         packages = {
           default = pi;
           pi = pi;
           planner = planner;
+          coder = coder;
           piBase = piBase;
           piCustomizations = piCustomizations;
           lotd-credential-helper = lotdCredentialHelper;
@@ -456,6 +493,10 @@
         apps.planner = {
           type = "app";
           program = "${planner}/bin/pi";
+        };
+        apps.coder = {
+          type = "app";
+          program = "${coder}/bin/agent-coder";
         };
       }
     );
