@@ -5,9 +5,16 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-coder:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v16
-      - run: make
+      - run: nix build .#coder
+
+  build-planner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - run: nix build .#planner
