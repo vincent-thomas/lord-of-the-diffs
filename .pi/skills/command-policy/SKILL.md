@@ -1,11 +1,11 @@
 ---
 name: command-policy
-description: "Add, modify, or remove shell command policy entries in packages/agent-lord/extensions/command-policy/logic.ts. Use when allowing a new command, banning a command, or restricting flags."
+description: "Add, modify, or remove shell command policy entries in the `entries` array in packages/agent-lord/extensions/command-policy/index.ts. Use when allowing a new command, banning a command, or restricting flags."
 ---
 
 # command-policy
 
-The command policy lives in `packages/agent-lord/extensions/command-policy/logic.ts` as an array of `CommandPolicyEntry` objects in the `COMMAND_POLICY_ENTRIES` constant. The policy is enforced by `packages/agent-lord/extensions/command-policy/index.ts` which uses `createCommandPolicyExtension()` from `@vt-pi/command-policy` (the `packages/command-policy` workspace package).
+The command policy is defined inline in `packages/agent-lord/extensions/command-policy/index.ts` as the `entries` array passed to `createCommandPolicyExtension({ entries: [...] })` from `@vt-pi/command-policy` (the `packages/command-policy` workspace package). Command-name predicates used by some entries (`isPythonCommand`, `isPerlCommand`, `isAwkCommand`) live in `packages/agent-lord/extensions/command-policy/predicates.ts`.
 
 ## Entry types
 
@@ -23,13 +23,13 @@ There are three entry forms, defined by `packages/command-policy/types.ts`:
 ```
 
 - `command` can be a string (exact lowercase basename match) or a predicate `(use: CommandUse) => boolean` — `use.name` is the resolved command name, not a bare string, so match against `use.name` (not `use` itself)
-- When a predicate is needed, match the command by name:
+- When a predicate is needed, match the command by name. Reusable name predicates live in `predicates.ts`:
 
 ```typescript
 {
   name: "Python",
   status: CommandPolicyStatus.Banned,
-  command: (use): boolean => /^python(?:\d+(?:\.\d+)?)?$/.test(use.name),
+  command: (use) => isPythonCommand(use.name),
   description: "Use safer shell tools or Pi tools instead.",
 }
 ```
@@ -89,11 +89,7 @@ If `subcommand` is not set, the policy matches any invocation of that command (e
 
 ## Adding an entry
 
-1. Open `packages/agent-lord/extensions/command-policy/logic.ts`
-2. Add a new object to the `COMMAND_POLICY_ENTRIES` array
-3. Run `nix build` to verify the extension still compiles and tests pass
-4. No changes needed to `index.ts` — it applies all entries automatically
-
-## System prompt
-
-If the command policy needs additional system prompt guidance beyond what each entry's `description` provides, edit `COMMAND_POLICY_SYSTEM_PROMPT` in the same file. It's appended to the agent's system prompt on every turn.
+1. Open `packages/agent-lord/extensions/command-policy/index.ts`
+2. Add a new object to the `entries` array passed to `createCommandPolicyExtension({ entries: [...] })`
+3. If the entry needs a new command-name predicate, add it to `predicates.ts` (with a unit test in `predicates.test.ts`) and import it in `index.ts`
+4. Run `nix build` to verify the extension still compiles and tests pass

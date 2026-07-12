@@ -60,17 +60,20 @@ export function executeCommit(message: string, cwd: string): void {
 	execSync("git add -A", { cwd, encoding: "utf-8" });
 
 	// Check if there's anything to commit
+	// git diff --cached --quiet exits 0 if no changes, 1 if there are changes
 	try {
 		execSync("git diff --cached --quiet", { cwd, encoding: "utf-8" });
-		// No diff = nothing to commit
+		// If we got here, exit code was 0 = no changes
 		throw new Error(
 			"No changes to commit. Did you forget to modify files?",
 		);
 	} catch (err: any) {
-		// Non-zero exit means there ARE changes (diff --quiet exits 1 if there's a diff)
-		if (!err.message.includes("Command failed")) {
+		// Exit code 1 means there ARE changes - this is what we want
+		// Any other error (not status 1) is a real problem
+		if (err.status !== 1) {
 			throw err;
 		}
+		// Status 1 = changes exist, continue to commit
 	}
 
 	// Commit with the message
