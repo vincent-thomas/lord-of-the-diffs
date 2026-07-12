@@ -1,3 +1,6 @@
 result
 node_modules
 dist
+
+# agent-planner's default output artifact (PLANNER_OUTPUT)
+plan.json
