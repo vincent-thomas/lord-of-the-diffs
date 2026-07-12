@@ -21,19 +21,25 @@ function task(overrides: Partial<Plan["tasks"][number]> = {}) {
 }
 
 test("validatePlan accepts a well-formed plan", () => {
-	const plan: Plan = { approach: "x", tasks: [task(), task({ title: "Second" })] };
+	const plan: Plan = { what: "w", why: "y", tasks: [task(), task({ title: "Second" })] };
 	assert.deepEqual(validatePlan(plan), []);
 });
 
 test("validatePlan rejects an empty task list", () => {
-	assert.deepEqual(validatePlan({ approach: "x", tasks: [] }), ["Plan has no tasks."]);
+	assert.deepEqual(validatePlan({ what: "w", why: "y", tasks: [] }), ["Plan has no tasks."]);
+});
+
+test("validatePlan flags a missing what or why", () => {
+	const errors = validatePlan({ what: "  ", why: "", tasks: [task()] });
+	assert.ok(errors.some((e) => /`what`/.test(e)));
+	assert.ok(errors.some((e) => /`why`/.test(e)));
 });
 
 test("serializePlan is stable, indented, newline-terminated JSON", () => {
-	const out = serializePlan({ approach: "a", tasks: [task()] });
+	const out = serializePlan({ what: "w", why: "y", tasks: [task()] });
 	assert.ok(out.endsWith("\n"));
 	assert.equal(JSON.parse(out).tasks[0].title, "Do the thing");
-	assert.match(out, /\n {2}"approach"/);
+	assert.match(out, /\n {2}"what"/);
 });
 
 test("resolveOutputPath honors an absolute env override", () => {

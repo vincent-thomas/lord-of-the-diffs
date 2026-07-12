@@ -38,6 +38,17 @@ task list. Everything you say while working is ignored by the caller; the
 prose — put it in the tool call. Call it exactly once, after you've grounded
 the plan in the codebase.
 
+The call has two top-level fields plus the task list:
+
+- `what`: precisely what the change is — concrete enough that an engineer could
+  carry it out from this alone (the specific behavior/structure to add or
+  alter, and where).
+- `why`: why the change is needed — the problem or goal it serves, so a reader
+  understands the motivation without external context.
+
+The bar for `what` + `why`: a human given just those two values should
+understand why the change is needed and be able to implement it themselves.
+
 `submit_plan.tasks` is an **ordered list** — its order is the implementation and
 commit order, and the orchestrator assigns its own ids for tracking, so you do
 not supply one. Each task has these fields:

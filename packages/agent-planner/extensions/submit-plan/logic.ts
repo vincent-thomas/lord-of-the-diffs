@@ -23,8 +23,17 @@ export interface PlanTask {
 }
 
 export interface Plan {
-	/** Short approach summary for the whole request. */
-	approach: string;
+	/**
+	 * Precisely what the change is — concrete enough that an engineer could carry
+	 * it out from this alone: the specific behavior or structure to add or alter,
+	 * and where.
+	 */
+	what: string;
+	/**
+	 * Why the change is needed — the problem, context, or goal it serves, so a
+	 * reader understands the motivation without any external context.
+	 */
+	why: string;
 	/**
 	 * The single-piece tasks. This is an ordered list: the tasks land as a flat,
 	 * linear commit history, so array position IS the implementation/commit order
@@ -49,6 +58,12 @@ export function validatePlan(plan: Plan): string[] {
 	const errors: string[] = [];
 	const tasks = plan.tasks ?? [];
 
+	if (!plan.what?.trim()) {
+		errors.push("Plan is missing `what` (a precise description of the change).");
+	}
+	if (!plan.why?.trim()) {
+		errors.push("Plan is missing `why` (the motivation for the change).");
+	}
 	if (tasks.length === 0) {
 		errors.push("Plan has no tasks.");
 	}
