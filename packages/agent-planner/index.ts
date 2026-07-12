@@ -22,6 +22,10 @@ import { createExploreExtension } from "@vt-pi/agent-explorer";
 import submitPlanExtension from "./extensions/submit-plan/index.ts";
 import { readFileSync } from "node:fs";
 
+// Public plan-artifact types: agent-planner is the single source of truth for
+// the shape the planner emits and consumers (e.g. @vt-pi/agent-coder) read.
+export type { Plan, PlanTask } from "./extensions/submit-plan/logic.ts";
+
 interface CliArgs {
   prompt: string;
   model: string;

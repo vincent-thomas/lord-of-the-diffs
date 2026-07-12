@@ -13,9 +13,7 @@ function task(overrides: Partial<Plan["tasks"][number]> = {}) {
     title: "Do the thing",
     goal: "Because reasons",
     acceptance: "Tests pass",
-    files: "src/thing.ts",
     constraints: "none",
-    specialist: "code-writer",
     ...overrides,
   };
 }

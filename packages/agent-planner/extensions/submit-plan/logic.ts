@@ -14,12 +14,8 @@ export interface PlanTask {
   goal: string;
   /** Concrete, checkable done criteria. */
   acceptance: string;
-  /** Files or module the change is expected to touch. */
-  files: string;
   /** What to avoid or preserve ("none" if truly nothing). */
   constraints: string;
-  /** Which specialist implements it, e.g. "code-writer". */
-  specialist: string;
 }
 
 export interface Plan {

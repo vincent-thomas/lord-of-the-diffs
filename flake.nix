@@ -232,7 +232,7 @@
               makeWrapper "${nodejs}/bin/node" "$out/bin/planner" \
                 --add-flags "${piBase}/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js" \
                 --add-flags "--extension ${plannerCustomizations}/planner/dist/extensions/submit-plan" \
-                --add-flags "--extension ${plannerCustomizations}/planner/dist/extensions/explore.ts" \
+                --add-flags "--extension ${plannerCustomizations}/planner/dist/extensions/explore.js" \
                 --add-flags "--append-system-prompt ${plannerCustomizations}/AGENTS.md" \
                 --add-flags "--tools read,grep,find,ls,explore,submit_plan"
             '';
