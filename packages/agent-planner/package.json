@@ -1,0 +1,25 @@
+{
+	"name": "@vt-pi/agent-planner",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"bin": {
+		"agent-planner": "./dist/index.js"
+	},
+	"exports": {
+		".": "./dist/index.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "node --test"
+	},
+	"dependencies": {
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-ai": "*",
+		"@vt-pi/agent-explorer": "workspace:*",
+		"typebox": "^1.1.24"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0"
+	}
+}

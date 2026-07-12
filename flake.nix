@@ -331,11 +331,10 @@
         # workspaceDeps already deployed @vt-pi/agent-lord as a self-contained
         # tree (extensions/lib/skills/AGENTS.md + a node_modules with every
         # @vt-pi/* and real dependency fully materialized) — just copy it.
-        piCustomizations =
-          pkgs.runCommand "pi-customizations" { } ''
-            cp -r ${workspaceDeps}/agent-lord $out
-            chmod -R u+w $out
-          '';
+        piCustomizations = pkgs.runCommand "pi-customizations" { } ''
+          cp -r ${workspaceDeps}/agent-lord $out
+          chmod -R u+w $out
+        '';
 
         # ── 3. Final Pi package (base + customizations) ───────────────────────
         pi =
@@ -393,6 +392,151 @@
                 --prefix PATH : ${gh}/bin \
                 --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
             '';
+<<<<<<< Updated upstream
+=======
+
+        # The code-writer (default). Full toolset, agent-lord's extensions.
+        pi = mkPiAgent {
+          name = "pi-with-customizations";
+          tree = piCustomizations;
+          description = "Pi coding agent with custom extensions and configuration";
+        };
+
+        # The planner. Standalone CLI that decomposes feature requests into tasks.
+        # Read-only agent built from agent-planner/index.ts.
+        planner = pkgs.stdenv.mkDerivation {
+          pname = "agent-planner";
+          version = "0.1.0";
+
+          src = ./.;
+
+          nativeBuildInputs = [
+            nodejs
+            pnpm
+            pkgs.pnpmConfigHook
+            pkgs.makeWrapper
+          ];
+
+          pnpmDeps = pkgs.fetchPnpmDeps {
+            pname = "agent-planner-deps";
+            version = "0.1.0";
+            src = ./.;
+            inherit pnpm;
+            fetcherVersion = 4;
+            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
+          };
+
+          # pnpmConfigHook automatically runs pnpm install with the right store setup
+          # We override it to use --filter to install only agent-planner's deps
+          # Include dev dependencies needed for build (typescript)
+          preConfigure = ''
+            # pnpmConfigHook will run, but we want to filter the install
+            export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-planner... --include-workspace-root"
+            export NODE_ENV="development"
+          '';
+
+          buildPhase = ''
+            runHook preBuild
+
+            # Build only agent-planner and its workspace dependencies
+            pnpm --reporter=append-only --filter=@vt-pi/agent-planner... run build
+
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+
+            # Deploy agent-planner as a self-contained tree
+            mkdir -p $out/lib
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-planner deploy $out/lib/agent
+
+            # Copy the built dist/ from the workspace to the deployed tree
+            # (pnpm deploy doesn't copy build artifacts)
+            cp -r packages/agent-planner/dist $out/lib/agent/
+
+            # Create the binary wrapper
+            mkdir -p $out/bin
+            makeWrapper "${nodejs}/bin/node" "$out/bin/agent-planner" \
+              --add-flags "$out/lib/agent/dist/index.js"
+
+            runHook postInstall
+          '';
+
+          meta = {
+            description = "Pi planner agent — read-only decomposition of a feature request into single-piece tasks";
+            mainProgram = "agent-planner";
+          };
+        };
+
+        # The code-writer. Standalone CLI that implements a single plan task.
+        # Unlike pi/planner (which wrap the upstream pi CLI), this is its own
+        # agent binary built from agent-coder/index.ts.
+        coder = pkgs.stdenv.mkDerivation {
+          pname = "agent-coder";
+          version = "0.1.0";
+
+          src = ./.;
+
+          nativeBuildInputs = [
+            nodejs
+            pnpm
+            pkgs.pnpmConfigHook
+            pkgs.makeWrapper
+          ];
+
+          pnpmDeps = pkgs.fetchPnpmDeps {
+            pname = "agent-coder-deps";
+            version = "0.1.0";
+            src = ./.;
+            inherit pnpm;
+            fetcherVersion = 4;
+            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
+          };
+
+          # pnpmConfigHook automatically runs pnpm install with the right store setup
+          # We override it to use --filter to install only agent-coder's deps
+          # Include dev dependencies needed for build (typescript)
+          preConfigure = ''
+            # pnpmConfigHook will run, but we want to filter the install
+            export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-coder... --include-workspace-root"
+            export NODE_ENV="development"
+          '';
+
+          buildPhase = ''
+            runHook preBuild
+
+            # Build only agent-coder and its workspace dependencies
+            pnpm --reporter=append-only --filter=@vt-pi/agent-coder... run build
+
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+
+            # Deploy agent-coder as a self-contained tree
+            mkdir -p $out/lib
+            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-coder deploy $out/lib/agent
+
+            # Copy the built dist/ from the workspace to the deployed tree
+            # (pnpm deploy doesn't copy build artifacts)
+            cp -r packages/agent-coder/dist $out/lib/agent/
+
+            # Create the binary wrapper
+            mkdir -p $out/bin
+            makeWrapper "${nodejs}/bin/node" "$out/bin/agent-coder" \
+              --add-flags "$out/lib/agent/dist/index.js"
+
+            runHook postInstall
+          '';
+
+          meta = {
+            description = "Hyper-specialized agent for implementing a single plan task";
+            mainProgram = "agent-coder";
+          };
+        };
+>>>>>>> Stashed changes
       in
       {
         packages = {
@@ -414,6 +558,17 @@
           type = "app";
           program = "${pi}/bin/pi";
         };
+<<<<<<< Updated upstream
+=======
+        apps.planner = {
+          type = "app";
+          program = "${planner}/bin/agent-planner";
+        };
+        apps.coder = {
+          type = "app";
+          program = "${coder}/bin/agent-coder";
+        };
+>>>>>>> Stashed changes
       }
     );
 }

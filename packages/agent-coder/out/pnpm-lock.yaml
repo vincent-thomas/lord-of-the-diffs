@@ -3,109 +3,24 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  injectWorkspacePackages: true
 
 importers:
 
-  .: {}
-
-  packages/agent-advisor:
+  .:
     dependencies:
       '@mariozechner/pi-ai':
-        specifier: ^0.73.1
+        specifier: 0.73.1(ws@8.21.0)(zod@4.4.3)
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
       '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
+        specifier: 0.73.1(ws@8.21.0)(zod@4.4.3)
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@vt-pi/agent-explorer':
-        specifier: workspace:*
-        version: link:../agent-explorer
       typebox:
-        specifier: ^1.1.24
+        specifier: 1.3.6
         version: 1.3.6
     devDependencies:
       typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
-  packages/agent-explorer:
-    dependencies:
-      '@mariozechner/pi-ai':
-        specifier: ^0.73.1
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      typebox:
-        specifier: ^1.1.24
-        version: 1.3.6
-    devDependencies:
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
-  packages/agent-lord:
-    dependencies:
-      '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@vt-pi/agent-advisor':
-        specifier: workspace:*
-        version: file:packages/agent-advisor
-      '@vt-pi/agent-explorer':
-        specifier: workspace:*
-        version: file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)
-      '@vt-pi/command-policy':
-        specifier: workspace:*
-        version: link:../command-policy
-      '@vt-pi/fix-ci':
-        specifier: workspace:*
-        version: link:../fix-ci
-<<<<<<< Updated upstream
-=======
-
-  packages/agent-planner:
-    dependencies:
-      '@mariozechner/pi-ai':
-        specifier: '*'
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@mariozechner/pi-coding-agent':
-        specifier: '*'
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@vt-pi/agent-explorer':
-        specifier: workspace:*
-        version: link:../agent-explorer
-      typebox:
-        specifier: ^1.1.24
-        version: 1.3.6
-    devDependencies:
-      typescript:
-        specifier: ^5.0.0
+        specifier: 5.9.3
         version: 5.9.3
->>>>>>> Stashed changes
-
-  packages/command-policy:
-    dependencies:
-      '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-    devDependencies:
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
-  packages/fix-ci:
-    dependencies:
-      '@mariozechner/pi-coding-agent':
-        specifier: ^0.73.1
-        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
-      typebox:
-        specifier: ^1.1.24
-        version: 1.3.6
-    devDependencies:
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
 
 packages:
 
@@ -512,11 +427,23 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@vt-pi/agent-advisor@file:packages/agent-advisor':
-    resolution: {directory: packages/agent-advisor, type: directory}
+  '@vt-pi/agent-advisor@file:///Users/vt/personal/vt-pi/packages/agent-advisor':
+    resolution: {directory: ../../agent-advisor, type: directory}
 
-  '@vt-pi/agent-explorer@file:packages/agent-explorer':
-    resolution: {directory: packages/agent-explorer, type: directory}
+  '@vt-pi/agent-explorer@file:///Users/vt/personal/vt-pi/packages/agent-explorer':
+    resolution: {directory: ../../agent-explorer, type: directory}
+
+  '@vt-pi/agent-lord@file:///Users/vt/personal/vt-pi/packages/agent-lord':
+    resolution: {directory: ../../agent-lord, type: directory}
+
+  '@vt-pi/agent-planner@file:///Users/vt/personal/vt-pi/packages/agent-planner':
+    resolution: {directory: ../../agent-planner, type: directory}
+
+  '@vt-pi/command-policy@file:///Users/vt/personal/vt-pi/packages/command-policy':
+    resolution: {directory: ../../command-policy, type: directory}
+
+  '@vt-pi/fix-ci@file:///Users/vt/personal/vt-pi/packages/fix-ci':
+    resolution: {directory: ../../fix-ci, type: directory}
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -955,6 +882,11 @@ packages:
   typebox@1.3.6:
     resolution: {integrity: sha512-Sc8RA0NCMEFmApHNU9ZMzqcpQj46She44J8ffpLM/bdhLNUZKq7DJumcLcsFx1gRmDfQPgCgOmFFJ7rcnfWNyA==}
 
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -974,6 +906,9 @@ packages:
   uuid@14.0.1:
     resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
     hasBin: true
+
+  vt-pi@file:///Users/vt/personal/vt-pi:
+    resolution: {directory: ../../.., type: directory}
 
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
@@ -1505,12 +1440,39 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vt-pi/agent-advisor@file:packages/agent-advisor':
+  '@vt-pi/agent-advisor@file:///Users/vt/personal/vt-pi/packages/agent-advisor':
     dependencies:
       '@mariozechner/pi-ai': 0.73.1(ws@8.21.0)(zod@4.4.3)
       '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
-      '@vt-pi/agent-explorer': file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/agent-explorer': '@vt-pi/agent-explorer@file:///Users/vt/personal/vt-pi/packages/agent-explorer'
       typebox: 1.3.6
+
+  '@vt-pi/agent-explorer@file:///Users/vt/personal/vt-pi/packages/agent-explorer':
+    dependencies:
+      '@mariozechner/pi-ai': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      typebox: 1.3.6
+
+  '@vt-pi/agent-lord@file:///Users/vt/personal/vt-pi/packages/agent-lord':
+    dependencies:
+      '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/agent-advisor': '@vt-pi/agent-advisor@file:///Users/vt/personal/vt-pi/packages/agent-advisor'
+      '@vt-pi/agent-explorer': '@vt-pi/agent-explorer@file:///Users/vt/personal/vt-pi/packages/agent-explorer'
+      '@vt-pi/command-policy': '@vt-pi/command-policy@file:///Users/vt/personal/vt-pi/packages/command-policy(ws@8.21.0)(zod@4.4.3)'
+      '@vt-pi/fix-ci': '@vt-pi/fix-ci@file:///Users/vt/personal/vt-pi/packages/fix-ci(ws@8.21.0)(zod@4.4.3)'
+
+  '@vt-pi/agent-planner@file:///Users/vt/personal/vt-pi/packages/agent-planner':
+    dependencies:
+      '@vt-pi/agent-explorer': '@vt-pi/agent-explorer@file:///Users/vt/personal/vt-pi/packages/agent-explorer'
+      typebox: 1.3.6
+
+  '@vt-pi/command-policy@file:///Users/vt/personal/vt-pi/packages/command-policy':
+    dependencies:
+      '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
+
+  '@vt-pi/command-policy@file:///Users/vt/personal/vt-pi/packages/command-policy(ws@8.21.0)(zod@4.4.3)':
+    dependencies:
+      '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - '@opentelemetry/api'
@@ -1520,9 +1482,13 @@ snapshots:
       - ws
       - zod
 
-  '@vt-pi/agent-explorer@file:packages/agent-explorer(ws@8.21.0)(zod@4.4.3)':
+  '@vt-pi/fix-ci@file:///Users/vt/personal/vt-pi/packages/fix-ci':
     dependencies:
-      '@mariozechner/pi-ai': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
+      typebox: 1.3.6
+
+  '@vt-pi/fix-ci@file:///Users/vt/personal/vt-pi/packages/fix-ci(ws@8.21.0)(zod@4.4.3)':
+    dependencies:
       '@mariozechner/pi-coding-agent': 0.73.1(ws@8.21.0)(zod@4.4.3)
       typebox: 1.3.6
     transitivePeerDependencies:
@@ -1979,6 +1945,8 @@ snapshots:
 
   typebox@1.3.6: {}
 
+  typescript@5.9.3: {}
+
   typescript@7.0.2:
     optionalDependencies:
       '@typescript/typescript-aix-ppc64': 7.0.2
@@ -2009,6 +1977,8 @@ snapshots:
   undici@7.28.0: {}
 
   uuid@14.0.1: {}
+
+  vt-pi@file:///Users/vt/personal/vt-pi: {}
 
   web-streams-polyfill@3.3.3: {}
 
