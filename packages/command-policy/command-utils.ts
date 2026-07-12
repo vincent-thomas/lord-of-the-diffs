@@ -6,42 +6,13 @@
  * matching.test.ts.
  *
  * The goal is to find the *real* executable a shell segment runs, seeing
- * through environment-variable prefixes (`FOO=bar cmd`), command wrappers
- * (`sudo`, `env`, …), absolute paths (`/bin/cat`), alias-busting backslashes
- * (`\cat`), and to look inside pipelines and command substitutions.
+ * through environment-variable prefixes (`FOO=bar cmd`), absolute paths
+ * (`/bin/cat`), alias-busting backslashes (`\cat`), and to look inside
+ * pipelines and command substitutions.
  */
 
 // `FOO=bar`, `PYTHONPATH=.` — a leading environment assignment, not a command.
 const ENV_ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*=.*$/;
-
-// Wrappers that delegate to a following command. We skip past these (and any
-// option flags they carry) to reach the actual command being executed.
-// xargs counts too: `find . | xargs rm -rf` should be checked as `rm -rf`,
-// not waved through under an unconditionally-allowed "xargs".
-const WRAPPERS = new Set([
-	"env",
-	"command",
-	"exec",
-	"nohup",
-	"nice",
-	"time",
-	"builtin",
-	"stdbuf",
-	"setsid",
-	"ionice",
-	"xargs",
-]);
-
-const WRAPPER_FLAGS_WITH_VALUE: Record<string, ReadonlySet<string>> = {
-	nice: new Set(["-n", "--adjustment"]),
-	ionice: new Set(["-c", "--class", "-n", "--classdata", "--pid"]),
-	stdbuf: new Set(["-i", "-o", "-e"]),
-	xargs: new Set([
-		"-I", "-L", "-n", "-P", "-s", "-a", "-d", "-E",
-		"--replace", "--max-lines", "--max-args", "--max-procs", "--max-chars",
-		"--arg-file", "--delimiter", "--eof-string",
-	]),
-};
 
 /**
  * Split a shell command line into the individual runnable segments. Splits on
@@ -426,7 +397,7 @@ function hasDisguisedFlag(args: string[]): boolean {
 /**
  * Resolve the actual command a single segment invokes: its executable name
  * (lowercased basename) plus the raw argument tokens that follow. Skips
- * leading environment assignments and command wrappers (sudo, env, …).
+ * leading environment assignments (`FOO=bar cmd`).
  *
  * Returns:
  *  - `null` when the segment runs nothing (empty, only env assignments, …)
@@ -453,16 +424,6 @@ export function commandInvocation(segment: string): { name: string; args: string
 		// than resolving a nonexistent "command" named `"`.
 		if (base === "" || /^['"\\]+$/.test(base)) {
 			i++;
-			continue;
-		}
-		if (WRAPPERS.has(base)) {
-			i++;
-			// Skip the wrapper's own option flags and inline assignments.
-			while (i < tokens.length && (tokens[i].startsWith("-") || ENV_ASSIGN.test(tokens[i]))) {
-				const flag = tokens[i];
-				i++;
-				if (WRAPPER_FLAGS_WITH_VALUE[base]?.has(flag) && i < tokens.length) i++;
-			}
 			continue;
 		}
 		const args = tokens.slice(i + 1);

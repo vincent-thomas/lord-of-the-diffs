@@ -299,13 +299,12 @@ test("second command use in a chain is checked too", () => {
 	assert.match(violation?.reason ?? "", /not on the allow list/);
 });
 
-test("xargs is transparent to the wrapped command's banned flags", () => {
-	const violation = evaluateCommand("rg foo | xargs rm -rf", testEntries);
-	assert.match(violation?.reason ?? "", /Flag `-rf` is not allowed/);
-});
-
-test("xargs wrapping an allowed command is allowed", () => {
-	assert.equal(evaluateCommand("xargs rg foo", testEntries), null);
+test("a former wrapper command is checked as its own name, not seen through", () => {
+	// xargs (and env, nice, nohup, …) are no longer transparent: they are just
+	// ordinary command names, denied unless explicitly allowed. That closes the
+	// bypass where an unlisted wrapper could front for a banned command.
+	const violation = evaluateCommand("xargs rg foo", testEntries);
+	assert.match(violation?.reason ?? "", /not on the allow list/);
 });
 
 const entriesWithEcho: CommandPolicyEntry[] = [...testEntries, { name: "echo", status: CommandPolicyStatus.Allowed, command: "echo" }];
