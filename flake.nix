@@ -277,8 +277,9 @@
           # build`, recursively, not available inside this derivation's
           # sandbox.
           #
-          # @vt-pi/command-policy, @vt-pi/agent-explorer, and
-          # @vt-pi/agent-advisor are plain, build-step-free TypeScript
+          # @vt-pi/command-policy, @vt-pi/agent-explorer,
+          # @vt-pi/agent-advisor, and @vt-pi/fix-ci are plain,
+          # build-step-free TypeScript
           # everywhere *except* here: Node refuses to type-strip a .ts file
           # whose real path resolves under any node_modules directory, and
           # `pnpm deploy` (installPhase, below) always materializes workspace
