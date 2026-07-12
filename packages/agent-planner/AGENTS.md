@@ -25,8 +25,10 @@ context lean:
   logical change, internally consistent, valid on its own.
 - If a task would need two independent commits, or touches unrelated areas,
   split it into separate tasks. **When in doubt, split.**
-- Order tasks so each builds on landed ones: prep/refactor first, new
-  abstractions next, wiring/usage last. Express real ordering via `Depends on`.
+- Emit tasks in the exact order they should be implemented and committed. The
+  plan lands as a flat, linear commit history, so each task is applied on top
+  of the previous ones and may rely on their changes: prep/refactor first, new
+  abstractions next, wiring/usage last.
 
 ## Output — call `submit_plan` once, at the end
 
@@ -36,15 +38,15 @@ task list. Everything you say while working is ignored by the caller; the
 prose — put it in the tool call. Call it exactly once, after you've grounded
 the plan in the codebase.
 
-Each task in `submit_plan.tasks` has these fields:
+`submit_plan.tasks` is an **ordered list** — its order is the implementation and
+commit order, and the orchestrator assigns its own ids for tracking, so you do
+not supply one. Each task has these fields:
 
-- `id`: stable unique identifier, e.g. "T1"
 - `title`: imperative one-line summary
 - `goal`: what changes and why (the intent, not step-by-step instructions)
 - `acceptance`: concrete, checkable criteria for done (tests pass, behavior X)
 - `files`: the files or module the change is expected to touch
 - `constraints`: what to avoid or preserve ("none" if truly nothing)
-- `dependsOn`: array of task ids this builds on (empty array if independent)
 - `specialist`: which agent implements it (code-writer, auth-auditor,
   cybersecurity, …) — default "code-writer"
 

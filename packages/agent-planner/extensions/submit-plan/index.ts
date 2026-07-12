@@ -29,9 +29,10 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Emit the final decomposition as the machine-readable plan artifact and " +
 			"finish planning. Call this exactly once, at the end, with the complete " +
-			"task list — do NOT paste the plan as prose, put it here. The plan is " +
-			"validated (unique ids, resolvable dependsOn) and written as JSON to " +
-			"PLANNER_OUTPUT (default ./plan.json) for the implementation phase to consume.",
+			"task list — do NOT paste the plan as prose, put it here. The tasks are an " +
+			"ordered list (they land as a linear commit history, so order is the " +
+			"sequence); the plan is written as JSON to PLANNER_OUTPUT (default " +
+			"./plan.json) for the implementation phase to consume.",
 		promptSnippet: "Emit the final plan as a JSON artifact",
 		parameters: TObject({
 			approach: TString({
@@ -39,7 +40,6 @@ export default function (pi: ExtensionAPI) {
 			}),
 			tasks: TArray(
 				TObject({
-					id: TString({ description: 'Stable unique id, e.g. "T1".' }),
 					title: TString({ description: "Imperative one-line summary." }),
 					goal: TString({
 						description: "What changes and why — the intent, not step-by-step instructions.",
@@ -53,16 +53,15 @@ export default function (pi: ExtensionAPI) {
 					constraints: TString({
 						description: 'What to avoid or preserve ("none" if truly nothing).',
 					}),
-					dependsOn: TArray(TString(), {
-						description: "Task ids this one builds on; empty array when independent.",
-					}),
 					specialist: TString({
 						description: 'Which specialist implements it, e.g. "code-writer".',
 					}),
 				}),
 				{
 					description:
-						"The ordered single-piece tasks. Each must be implementable as exactly one commit.",
+						"The single-piece tasks, in the order they should be implemented and " +
+						"committed (they land as a linear history). Each must be implementable " +
+						"as exactly one commit.",
 				},
 			),
 		}),

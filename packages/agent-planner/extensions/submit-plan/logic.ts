@@ -8,8 +8,6 @@
 import { isAbsolute, join } from "node:path";
 
 export interface PlanTask {
-	/** Stable identifier, e.g. "T1". Unique within the plan. */
-	id: string;
 	/** Imperative one-line summary. */
 	title: string;
 	/** What changes and why — the intent, not step-by-step instructions. */
@@ -20,8 +18,6 @@ export interface PlanTask {
 	files: string;
 	/** What to avoid or preserve ("none" if truly nothing). */
 	constraints: string;
-	/** Task ids this one builds on; empty when independent. */
-	dependsOn: string[];
 	/** Which specialist implements it, e.g. "code-writer". */
 	specialist: string;
 }
@@ -29,7 +25,12 @@ export interface PlanTask {
 export interface Plan {
 	/** Short approach summary for the whole request. */
 	approach: string;
-	/** The ordered single-piece tasks. */
+	/**
+	 * The single-piece tasks. This is an ordered list: the tasks land as a flat,
+	 * linear commit history, so array position IS the implementation/commit order
+	 * and each task builds on the ones before it. The orchestrator assigns its
+	 * own ids for tracking; the planner does not.
+	 */
 	tasks: PlanTask[];
 }
 
@@ -50,29 +51,6 @@ export function validatePlan(plan: Plan): string[] {
 
 	if (tasks.length === 0) {
 		errors.push("Plan has no tasks.");
-	}
-
-	const ids = new Set<string>();
-	for (const task of tasks) {
-		const id = task.id?.trim();
-		if (!id) {
-			errors.push("A task has an empty id.");
-			continue;
-		}
-		if (ids.has(id)) {
-			errors.push(`Duplicate task id: ${id}`);
-		}
-		ids.add(id);
-	}
-
-	for (const task of tasks) {
-		for (const dep of task.dependsOn ?? []) {
-			if (dep === task.id) {
-				errors.push(`Task ${task.id} depends on itself.`);
-			} else if (!ids.has(dep)) {
-				errors.push(`Task ${task.id} depends on unknown task ${dep}.`);
-			}
-		}
 	}
 
 	return errors;
