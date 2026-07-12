@@ -9,6 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noCheck": true,
+    "rootDir": ".",
     "outDir": "dist"
   },
   "include": ["*.ts", "extensions/**/*.ts"],
