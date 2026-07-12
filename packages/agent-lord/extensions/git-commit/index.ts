@@ -6,7 +6,7 @@
  * the provided message. Does NOT stage anything itself.
  *
  * Manual `git commit` in bash is blocked by the command-policy extension
- * (COMMAND_POLICY_ENTRIES bans the "git commit" subcommand), not here.
+ * (its `entries` array bans the "git commit" subcommand), not here.
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";

@@ -1,6 +1,6 @@
 /**
  * predicates.test.ts — tests for this extension's language interpreter
- * command predicates (used to build COMMAND_POLICY_ENTRIES).
+ * command predicates (used to build the extension's `entries` array).
  *
  * Run with:   node --test predicates.test.ts
  */

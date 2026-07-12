@@ -20,6 +20,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import { resolve } from "node:path";
 import { createExploreExtension } from "@vt-pi/agent-explorer";
 import submitPlanExtension from "./extensions/submit-plan/index.ts";
+import { readFileSync } from "node:fs";
 
 interface CliArgs {
   prompt: string;
@@ -91,6 +92,23 @@ async function main() {
   const agentDir = getAgentDir();
   const agentsPromptPath = new URL("./AGENTS.md", import.meta.url).pathname;
 
+  // Verify AGENTS.md exists and log it for debugging
+  try {
+    const { readFileSync } = await import("node:fs");
+    const promptContent = readFileSync(agentsPromptPath, "utf-8");
+    console.log(
+      `\n📋 Loaded system prompt from ${agentsPromptPath} (${promptContent.length} chars)`,
+    );
+    if (!promptContent.includes("submit_plan")) {
+      console.error("⚠️  WARNING: AGENTS.md doesn't mention submit_plan!");
+    }
+  } catch (err) {
+    console.error(
+      `\n❌ Failed to load AGENTS.md from ${agentsPromptPath}:`,
+      err,
+    );
+  }
+
   // Set PLANNER_OUTPUT env var so submit_plan knows where to write
   process.env.PLANNER_OUTPUT = resolve(args.cwd, args.output);
 
@@ -102,7 +120,7 @@ async function main() {
     noPromptTemplates: true,
     noThemes: true,
     noContextFiles: true,
-    customSystemPromptPath: agentsPromptPath, // Use our AGENTS.md
+    appendSystemPromptOverride: () => readFileSync(agentsPromptPath),
     extensionFactories: [createExploreExtension(), submitPlanExtension],
   });
 
@@ -126,6 +144,9 @@ async function main() {
     if (event.type === "turn_start") {
       turnCount++;
       hasThinkingOutput = false;
+      if (turnCount > 1) {
+        console.log(`\n🔄 Turn ${turnCount} starting...`);
+      }
     }
 
     // Show thinking deltas in real-time
@@ -153,12 +174,6 @@ async function main() {
         hasSubmitted = true;
         console.log("\n✅ Plan submitted.");
       }
-    }
-
-    // Safety: stop after 50 turns (planner needs more room than coder)
-    if (event.type === "turn_end" && turnCount > 50) {
-      console.log("\n⚠ Turn limit exceeded (50). Stopping agent...");
-      void session.abort();
     }
   });
 

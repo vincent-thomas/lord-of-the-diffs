@@ -135,109 +135,7 @@
         '';
 
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
-        piBase = pkgs.buildNpmPackage {
-          pname = "pi-coding-agent";
-          version = "0.80.3";
-
-          src = pi-mono;
-
-          # Hash covers all npm deps declared in the root package-lock.json.
-          # Regenerate with:  nix build 2>&1 | awk '/got:/{print $2}'
-          npmDepsHash = "sha256-geh8LH88OZybFXkR/jDeTdew6TNMdFM6jhCSYKn//dU=";
-
-          inherit nodejs;
-
-          # canvas is a dev-only test dep in packages/ai — skip native compilation.
-          # tsgo and shx both ship as prebuilt/pure-JS so --ignore-scripts is safe.
-          npmFlags = [ "--ignore-scripts" ];
-
-          buildPhase = ''
-            runHook preBuild
-
-            # Expose node_modules/.bin (tsgo, shx, …) to npm run scripts.
-            export PATH="$PWD/node_modules/.bin:$PATH"
-
-            # packages/ai normally runs two network-fetching generate-* scripts
-            # before tsc; strip them — the generated files are pre-committed.
-            substituteInPlace packages/ai/package.json \
-              --replace "npm run generate-models && npm run generate-image-models && " ""
-
-            # Build all workspaces in order (tui → ai → agent → coding-agent).
-            # The root build script also handles chmod and copy-assets for us.
-            npm run build
-
-            # ── Post-build npm audit ────────────────────────────────────────
-            # Check the full dependency tree for known CVEs. The lockfile pins
-            # tarball hashes (npmDepsHash), but a CVE can exist in a hash-verified
-            # dependency — only a registry query catches those.
-            #
-            # Nix's sandbox may block network; if so, skip gracefully.
-            echo ""
-            echo "--- npm audit ---"
-            # Capture exit code via || (works even with shell -e: the ||
-            # chain means set -e never kills the build). Exit 0 = no vulns
-            # at audit_level, 1 = vulns found, 2+ = error (no network).
-            audit_exit=0
-            npm audit --audit-level=high --json 2>&1 >/tmp/npm-audit.json || audit_exit=$?
-            if [ -f /tmp/npm-audit.json ] && [ -s /tmp/npm-audit.json ]; then
-              if [ "$audit_exit" -eq 0 ]; then
-                echo "npm audit: no high/critical vulnerabilities"
-              elif [ "$audit_exit" -eq 1 ]; then
-                HIGH=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.high // 0' /tmp/npm-audit.json)
-                CRITICAL=$(${pkgs.jq}/bin/jq -r '.metadata.vulnerabilities.critical // 0' /tmp/npm-audit.json)
-                echo "⚠  npm audit: $HIGH high, $CRITICAL critical vulnerabilities found"
-                echo ""
-                echo "  Run locally to inspect:  npm audit --audit-level=high"
-              fi
-            else
-              echo "npm audit: registry unreachable (no network in Nix sandbox)"
-              echo "  Run locally to check:  npm audit --audit-level=high"
-            fi
-
-            runHook postBuild
-          '';
-
-          doCheck = false; # Tests run in workspaceDeps derivation
-
-          installPhase = ''
-            runHook preInstall
-
-            out_pkg="$out/lib/node_modules/@earendil-works/pi-coding-agent"
-            mkdir -p "$out_pkg"
-
-            cp packages/coding-agent/package.json \
-               packages/coding-agent/CHANGELOG.md \
-               "$out_pkg/"
-            cp -r packages/coding-agent/dist \
-                  packages/coding-agent/docs \
-                  packages/coding-agent/examples \
-                  "$out_pkg/"
-
-            # -L dereferences every workspace symlink on copy so $out contains
-            # no dangling symlinks and needs no manual fixup.
-            cp -rL node_modules "$out_pkg/"
-
-            # Create a simple wrapper (no customizations yet)
-            mkdir -p "$out/bin"
-            makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-              --add-flags "$out_pkg/dist/cli.js"
-
-            runHook postInstall
-          '';
-
-          nativeBuildInputs = [
-            pkgs.makeWrapper
-            pkgs.git
-          ];
-
-          meta = with pkgs.lib; {
-            description = "Base Pi coding agent package (upstream, no customizations)";
-            homepage = "https://github.com/badlogic/pi-mono";
-            license = licenses.mit;
-            mainProgram = "pi";
-            platforms = platforms.unix;
-          };
-        };
+        piBase = import ./nix/pi.nix { inherit pkgs nodejs pi-mono; };
 
         # ── pnpm dependencies for the workspace (real deps like @mariozechner/pi-coding-agent,
         # ── plus the @vt-pi/* workspace links pnpm sets up via shamefully-hoist) ──
@@ -255,7 +153,7 @@
             src = ./.;
             inherit pnpm;
             fetcherVersion = 4;
-            hash = "sha256-o/hjmTOxdir4MMvL9Qq6f1pP2OWN+h0GK7q6ksliYRc=";
+            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
           };
 
           # git is needed on PATH for the checkPhase below — several tests
@@ -267,308 +165,363 @@
             pkgs.git
           ];
 
-          # pnpmConfigHook's `pnpm install` already passes --ignore-scripts,
-          # avoiding native compilation for transitive deps (e.g. photon-node),
-          # same reasoning as piBase above.
-          #
-          # Override buildPhase outright rather than leaving stdenv's generic
-          # one in place, which would notice this repo's own root Makefile
-          # (copied in via `src = ./.`) and run `make` — which runs `nix
-          # build`, recursively, not available inside this derivation's
-          # sandbox.
-          #
-          # @vt-pi/command-policy, @vt-pi/agent-explorer,
-          # @vt-pi/agent-advisor, and @vt-pi/fix-ci are plain,
-          # build-step-free TypeScript
-          # everywhere *except* here: Node refuses to type-strip a .ts file
-          # whose real path resolves under any node_modules directory, and
-          # `pnpm deploy` (installPhase, below) always materializes workspace
-          # dependencies through its node_modules/.pnpm store. Compile them to
-          # plain .js here so the deployed tree has no raw .ts sitting inside
-          # node_modules — and so agent-lord's own tests below, which import
-          # @vt-pi/command-policy's runtime CommandPolicyStatus by package
-          # name, resolve real files instead of failing outright (buildPhase
-          # runs before checkPhase; the reverse order 404s on dist/index.js).
-          #
-          # --reporter=append-only: pnpm's default reporter redraws its
-          # progress tree in place via cursor control, which only works
-          # attached to a real TTY. Nix's build sandbox has none, so without
-          # this every redraw frame gets captured as its own log line —
-          # burying whatever a failing command actually printed under a wall
-          # of near-blank lines.
           buildPhase = ''
             runHook preBuild
             pnpm --reporter=append-only -r run build
             runHook postBuild
           '';
 
-          # Run the workspace test suite here, where the repo's real
-          # layout (root package.json + packages/*) and freshly
-          # installed node_modules already match up — no copying needed.
           doCheck = true;
           checkPhase = ''
             runHook preCheck
             pnpm --reporter=append-only -r test
             runHook postCheck
           '';
-
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out
-
-            # Deploy @vt-pi/agent-lord as a self-contained tree: its own
-            # extensions/lib/skills/AGENTS.md alongside a node_modules
-            # where every @vt-pi/* dependency (and all real deps like
-            # @mariozechner/pi-coding-agent) are fully materialized —
-            # no symlinks back into this build's own (different) tree.
-            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-lord deploy $out/agent-lord
-
-            runHook postInstall
-          '';
         };
+        #
 
-        # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
-        # workspaceDeps already deployed @vt-pi/agent-lord as a self-contained
-        # tree (extensions/lib/skills/AGENTS.md + a node_modules with every
-        # @vt-pi/* and real dependency fully materialized) — just copy it.
-        piCustomizations = pkgs.runCommand "pi-customizations" { } ''
-          cp -r ${workspaceDeps}/agent-lord $out
-          chmod -R u+w $out
-        '';
+        # The planner. Wraps the Pi CLI with planner-specific extensions and system prompt.
+        # Read-only agent that decomposes feature requests into tasks.
+        planner =
+          let
+            # Build planner extensions and AGENTS.md
+            plannerCustomizations = pkgs.stdenv.mkDerivation {
+              pname = "planner-customizations";
+              version = "0.1.0";
+              src = ./.;
 
-        # ── 3. Final Pi package (base + customizations) ───────────────────────
-        pi =
-          pkgs.runCommand "pi-with-customizations"
+              nativeBuildInputs = [
+                nodejs
+                pnpm
+                pkgs.pnpmConfigHook
+              ];
+
+              pnpmDeps = workspaceDeps.pnpmDeps;
+
+              preConfigure = ''
+                export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-planner... --include-workspace-root"
+                export NODE_ENV="development"
+              '';
+
+              buildPhase = ''
+                runHook preBuild
+                pnpm --reporter=append-only --filter=@vt-pi/agent-planner... run build
+                runHook postBuild
+              '';
+
+              installPhase = ''
+                runHook preInstall
+                mkdir -p $out
+                pnpm --reporter=append-only --offline --filter=@vt-pi/agent-planner deploy $out/planner
+                cp -r packages/agent-planner/dist $out/planner/
+                cp packages/agent-planner/AGENTS.md $out/
+                runHook postInstall
+              '';
+            };
+          in
+          pkgs.runCommand "planner"
             {
               nativeBuildInputs = [ pkgs.makeWrapper ];
-              passthru = {
-                inherit piBase piCustomizations;
-              };
-              meta = piBase.meta // {
-                description = "Pi coding agent with custom extensions and configuration";
+              meta = {
+                description = "Pi planner agent — decomposes requests into implementation tasks";
+                mainProgram = "planner";
               };
             }
             ''
-              # Copy the base pi package
-              cp -r ${piBase} $out
-              chmod -R u+w $out
-
-              # Add customizations to share/pi/
-              mkdir -p $out/share/pi
-              cp -r ${piCustomizations}/extensions $out/share/pi/extensions
-              cp -r ${piCustomizations}/lib $out/share/pi/lib
-              cp -r ${piCustomizations}/skills $out/share/pi/skills
-              cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
-
-              # Same node_modules (real deps + @vt-pi/* deployed packages) as
-              # piCustomizations, so extensions can resolve them at runtime too.
-              cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
-              chmod -R u+w $out/share/pi/node_modules
-
-              # Build --extension / --skill flags for every bundled item.
-              # Skip test files (*.test.ts) - they're for build-time validation only.
-              extra_flags=""
-              for ext in $out/share/pi/extensions/*; do
-                case "$(basename "$ext")" in
-                  *.test.ts) ;; # Skip test files
-                  *) extra_flags="$extra_flags --extension $ext" ;;
-                esac
-              done
-              for skill in $out/share/pi/skills/*; do
-                extra_flags="$extra_flags --skill $skill"
-              done
-
-              # Include the credential helper binary
-              cp ${lotdCredentialHelper}/bin/lotd-credential-helper $out/bin/lotd-credential-helper
-              cp ${lotdToken}/bin/lotd-token $out/bin/lotd-token
-
-              # Replace the wrapper: go back to node directly.
-              rm $out/bin/pi
-              makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
-                --run '[ -n "$LOTD_CONFIG_FILE" ] || { echo "pi: LOTD_CONFIG_FILE must be set" >&2; exit 1; }' \
-                --run '[ -f "$LOTD_CONFIG_FILE" ] || { echo "pi: config file not found: $LOTD_CONFIG_FILE" >&2; exit 1; }' \
-                --run 'export LOTD_CONFIG_FILE="$(cd "$(dirname "$LOTD_CONFIG_FILE")" && pwd)/$(basename "$LOTD_CONFIG_FILE")"' \
-                --prefix PATH : ${git}/bin \
-                --prefix PATH : ${gh}/bin \
-                --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+              mkdir -p $out/bin
+              makeWrapper "${nodejs}/bin/node" "$out/bin/planner" \
+                --add-flags "${piBase}/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js" \
+                --add-flags "--extension ${plannerCustomizations}/planner/dist/extensions/submit-plan" \
+                --add-flags "--extension ${plannerCustomizations}/planner/dist/extensions/explore.ts" \
+                --add-flags "--append-system-prompt ${plannerCustomizations}/AGENTS.md" \
+                --add-flags "--tools read,grep,find,ls,explore,submit_plan"
             '';
-<<<<<<< Updated upstream
-=======
 
-        # The code-writer (default). Full toolset, agent-lord's extensions.
-        pi = mkPiAgent {
-          name = "pi-with-customizations";
-          tree = piCustomizations;
-          description = "Pi coding agent with custom extensions and configuration";
-        };
+        # The coder. Wraps the Pi CLI with coder-specific extensions and system prompt.
+        # Hyper-specialized agent for implementing a single plan task.
+        coder =
+          let
+            # Build coder extensions and AGENTS.md
+            coderCustomizations = pkgs.stdenv.mkDerivation {
+              pname = "coder-customizations";
+              version = "0.1.0";
+              src = ./.;
 
-        # The planner. Standalone CLI that decomposes feature requests into tasks.
-        # Read-only agent built from agent-planner/index.ts.
-        planner = pkgs.stdenv.mkDerivation {
-          pname = "agent-planner";
-          version = "0.1.0";
+              nativeBuildInputs = [
+                nodejs
+                pnpm
+                pkgs.pnpmConfigHook
+              ];
 
-          src = ./.;
+              pnpmDeps = workspaceDeps.pnpmDeps;
 
-          nativeBuildInputs = [
-            nodejs
-            pnpm
-            pkgs.pnpmConfigHook
-            pkgs.makeWrapper
-          ];
+              preConfigure = ''
+                export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-coder... --include-workspace-root"
+                export NODE_ENV="development"
+              '';
 
-          pnpmDeps = pkgs.fetchPnpmDeps {
-            pname = "agent-planner-deps";
-            version = "0.1.0";
-            src = ./.;
-            inherit pnpm;
-            fetcherVersion = 4;
-            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
-          };
+              buildPhase = ''
+                runHook preBuild
+                pnpm --reporter=append-only --filter=@vt-pi/agent-coder... run build
+                runHook postBuild
+              '';
 
-          # pnpmConfigHook automatically runs pnpm install with the right store setup
-          # We override it to use --filter to install only agent-planner's deps
-          # Include dev dependencies needed for build (typescript)
-          preConfigure = ''
-            # pnpmConfigHook will run, but we want to filter the install
-            export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-planner... --include-workspace-root"
-            export NODE_ENV="development"
+              installPhase = ''
+                runHook preInstall
+                mkdir -p $out
+                pnpm --reporter=append-only --offline --filter=@vt-pi/agent-coder deploy $out/coder
+                cp -r packages/agent-coder/dist $out/coder/
+                cp packages/agent-coder/AGENTS.md $out/
+                runHook postInstall
+              '';
+            };
+          in
+          pkgs.writeShellScriptBin "agent-coder" ''
+            set -euo pipefail
+
+            usage() {
+              cat <<EOF
+            Usage: agent-coder <plan.json> <task-index>
+
+            Spawns a code-writing agent to implement exactly one task from a plan.
+
+            Arguments:
+              <plan.json>     Path to the plan file (from agent-planner)
+              <task-index>    0-based index of the task to implement
+
+            Example:
+              agent-coder ./plan.json 0
+              agent-coder ./plan.json 1
+            EOF
+              exit 1
+            }
+
+            # Parse arguments
+            if [ $# -lt 2 ]; then
+              usage
+            fi
+
+            PLAN_PATH="$1"
+            TASK_INDEX="$2"
+
+            if [ ! -f "$PLAN_PATH" ]; then
+              echo "Error: Plan file not found: $PLAN_PATH" >&2
+              exit 1
+            fi
+
+            # Validate task index
+            if ! [[ "$TASK_INDEX" =~ ^[0-9]+$ ]]; then
+              echo "Error: Task index must be a non-negative integer: $TASK_INDEX" >&2
+              exit 1
+            fi
+
+            # Extract plan fields using jq
+            PLAN_WHAT=$(${pkgs.jq}/bin/jq -r '.what' "$PLAN_PATH")
+            PLAN_WHY=$(${pkgs.jq}/bin/jq -r '.why' "$PLAN_PATH")
+            TASK_COUNT=$(${pkgs.jq}/bin/jq -r '.tasks | length' "$PLAN_PATH")
+
+            # Validate task index
+            if [ "$TASK_INDEX" -ge "$TASK_COUNT" ]; then
+              echo "Error: Task index $TASK_INDEX out of range (plan has $TASK_COUNT tasks)" >&2
+              exit 1
+            fi
+
+            # Extract current task
+            TASK_TITLE=$(${pkgs.jq}/bin/jq -r ".tasks[$TASK_INDEX].title" "$PLAN_PATH")
+            TASK_GOAL=$(${pkgs.jq}/bin/jq -r ".tasks[$TASK_INDEX].goal" "$PLAN_PATH")
+            TASK_ACCEPTANCE=$(${pkgs.jq}/bin/jq -r ".tasks[$TASK_INDEX].acceptance" "$PLAN_PATH")
+            TASK_CONSTRAINTS=$(${pkgs.jq}/bin/jq -r ".tasks[$TASK_INDEX].constraints" "$PLAN_PATH")
+
+            # Build acceptance criteria checklist
+            ACCEPTANCE_CHECKLIST=$(echo "$TASK_ACCEPTANCE" | ${pkgs.gnused}/bin/sed 's/\. /\n/g' | ${pkgs.gnused}/bin/sed '/^$/d' | ${pkgs.gnused}/bin/sed 's/^/- [ ] /')
+
+            # Extract plan motivation (first sentence)
+            PLAN_MOTIVATION=$(echo "$PLAN_WHY" | ${pkgs.gnused}/bin/sed 's/\([.!?]\).*/\1/')
+
+            # Build previous tasks section
+            PREVIOUS_SECTION=""
+            if [ "$TASK_INDEX" -gt 0 ]; then
+              PREVIOUS_SECTION="## Previous Tasks Completed\n\n"
+              for ((i=0; i<TASK_INDEX; i++)); do
+                PREV_TITLE=$(${pkgs.jq}/bin/jq -r ".tasks[$i].title" "$PLAN_PATH")
+                COMMIT_INDEX=$((TASK_INDEX - i - 1))
+                if COMMIT_HASH=$(${pkgs.git}/bin/git log --format=%h --skip="$COMMIT_INDEX" -n1 2>/dev/null); then
+                  if [ -n "$COMMIT_HASH" ]; then
+                    FILES=$(${pkgs.git}/bin/git show --name-only --format= "$COMMIT_HASH" 2>/dev/null | tr '\n' ', ' | ${pkgs.gnused}/bin/sed 's/,$//')
+                    PREVIOUS_SECTION="$PREVIOUS_SECTION$((i+1)). $PREV_TITLE\n   Files: $FILES\n   Commit: $COMMIT_HASH\n\n"
+                  else
+                    PREVIOUS_SECTION="$PREVIOUS_SECTION$((i+1)). $PREV_TITLE\n\n"
+                  fi
+                else
+                  PREVIOUS_SECTION="$PREVIOUS_SECTION$((i+1)). $PREV_TITLE\n\n"
+                fi
+              done
+              PREVIOUS_SECTION="$${PREVIOUS_SECTION}These tasks are already committed. Build on their changes.\n"
+            fi
+
+            # Build the complete prompt
+            read -r -d "" PROMPT <<EOF || true
+            # Implementation Task $((TASK_INDEX + 1))/$TASK_COUNT
+
+            ## Overall Goal
+
+            **What:** $PLAN_WHAT
+
+            **Why:** $PLAN_WHY
+            $(echo -e "$PREVIOUS_SECTION")
+            ## Your Task: $TASK_TITLE
+
+            **Goal:** $TASK_GOAL
+
+            **Acceptance Criteria:**
+            $ACCEPTANCE_CHECKLIST
+
+            **Constraints:** $TASK_CONSTRAINTS
+
+            ## Instructions
+
+            1. **Read first** — Understand the current codebase state before making changes
+            2. **Implement** — Make the changes described in "Goal"
+            3. **Verify** — Ensure all acceptance criteria are satisfied
+            4. **Commit** — Use the \`commit_task\` tool with this structure:
+
+            \`\`\`
+            commit_task({
+              subject: "$TASK_TITLE",
+              what: "[2-3 sentences describing the concrete changes you made]",
+              why: "$PLAN_MOTIVATION [add task-specific context if needed]"
+            })
+            \`\`\`
+
+            5. **Stop** — After committing, your session ends. Do NOT continue.
+
+            ## Commit Message Guidelines
+
+            **What:** Describe your actual implementation
+            - Be specific about functions, classes, files modified
+            - Include important details: defaults, edge cases, tradeoffs
+
+            **Why:** Explain the motivation
+            - Start with: "$PLAN_MOTIVATION"
+            - Add task-specific context if relevant
+            - Focus on the problem solved
+
+            ---
+
+            Begin implementing. Read the relevant code first.
+            EOF
+
+            echo -e "\n┌─ Task $((TASK_INDEX + 1))/$TASK_COUNT"
+            echo "│  $TASK_TITLE"
+            echo -e "└─ Starting agent...\n"
+
+            # Call Pi with the prompt and extensions
+            exec ${nodejs}/bin/node ${piBase}/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js \
+              --extension ${coderCustomizations}/coder/dist/extensions/commit-task \
+              --append-system-prompt ${coderCustomizations}/AGENTS.md \
+              --tools read,write,edit,bash,grep,glob,find,ls,commit_task \
+              "$PROMPT"
           '';
-
-          buildPhase = ''
-            runHook preBuild
-
-            # Build only agent-planner and its workspace dependencies
-            pnpm --reporter=append-only --filter=@vt-pi/agent-planner... run build
-
-            runHook postBuild
-          '';
-
-          installPhase = ''
-            runHook preInstall
-
-            # Deploy agent-planner as a self-contained tree
-            mkdir -p $out/lib
-            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-planner deploy $out/lib/agent
-
-            # Copy the built dist/ from the workspace to the deployed tree
-            # (pnpm deploy doesn't copy build artifacts)
-            cp -r packages/agent-planner/dist $out/lib/agent/
-
-            # Create the binary wrapper
-            mkdir -p $out/bin
-            makeWrapper "${nodejs}/bin/node" "$out/bin/agent-planner" \
-              --add-flags "$out/lib/agent/dist/index.js"
-
-            runHook postInstall
-          '';
-
-          meta = {
-            description = "Pi planner agent — read-only decomposition of a feature request into single-piece tasks";
-            mainProgram = "agent-planner";
-          };
-        };
-
-        # The code-writer. Standalone CLI that implements a single plan task.
-        # Unlike pi/planner (which wrap the upstream pi CLI), this is its own
-        # agent binary built from agent-coder/index.ts.
-        coder = pkgs.stdenv.mkDerivation {
-          pname = "agent-coder";
-          version = "0.1.0";
-
-          src = ./.;
-
-          nativeBuildInputs = [
-            nodejs
-            pnpm
-            pkgs.pnpmConfigHook
-            pkgs.makeWrapper
-          ];
-
-          pnpmDeps = pkgs.fetchPnpmDeps {
-            pname = "agent-coder-deps";
-            version = "0.1.0";
-            src = ./.;
-            inherit pnpm;
-            fetcherVersion = 4;
-            hash = "sha256-pwYmZMWL6xIdzXLs+klv0dpIAEbbHgGACbHChPK7Lho=";
-          };
-
-          # pnpmConfigHook automatically runs pnpm install with the right store setup
-          # We override it to use --filter to install only agent-coder's deps
-          # Include dev dependencies needed for build (typescript)
-          preConfigure = ''
-            # pnpmConfigHook will run, but we want to filter the install
-            export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-coder... --include-workspace-root"
-            export NODE_ENV="development"
-          '';
-
-          buildPhase = ''
-            runHook preBuild
-
-            # Build only agent-coder and its workspace dependencies
-            pnpm --reporter=append-only --filter=@vt-pi/agent-coder... run build
-
-            runHook postBuild
-          '';
-
-          installPhase = ''
-            runHook preInstall
-
-            # Deploy agent-coder as a self-contained tree
-            mkdir -p $out/lib
-            pnpm --reporter=append-only --offline --filter=@vt-pi/agent-coder deploy $out/lib/agent
-
-            # Copy the built dist/ from the workspace to the deployed tree
-            # (pnpm deploy doesn't copy build artifacts)
-            cp -r packages/agent-coder/dist $out/lib/agent/
-
-            # Create the binary wrapper
-            mkdir -p $out/bin
-            makeWrapper "${nodejs}/bin/node" "$out/bin/agent-coder" \
-              --add-flags "$out/lib/agent/dist/index.js"
-
-            runHook postInstall
-          '';
-
-          meta = {
-            description = "Hyper-specialized agent for implementing a single plan task";
-            mainProgram = "agent-coder";
-          };
-        };
->>>>>>> Stashed changes
       in
       {
         packages = {
-          default = pi;
-          pi = pi;
-          piBase = piBase;
-          piCustomizations = piCustomizations;
-          lotd-credential-helper = lotdCredentialHelper;
-          lotd-token = lotdToken;
-          git = git;
-          gh = gh;
+          # piBase = piBase;
+          planner = planner;
+          coder = coder;
+          # lotd-credential-helper = lotdCredentialHelper;
+          # lotd-token = lotdToken;
+          # git = git;
+          # gh = gh;
         };
 
-        apps.default = {
-          type = "app";
-          program = "${pi}/bin/pi";
-        };
-        apps.pi = {
-          type = "app";
-          program = "${pi}/bin/pi";
-        };
-<<<<<<< Updated upstream
-=======
+        # apps.default = {
+        #   type = "app";
+        #   program = "${pi}/bin/pi";
+        # };
+        # apps.pi = {
+        #   type = "app";
+        #   program = "${pi}/bin/pi";
+        # };
         apps.planner = {
           type = "app";
-          program = "${planner}/bin/agent-planner";
+          program = "${planner}/bin/planner";
         };
         apps.coder = {
           type = "app";
           program = "${coder}/bin/agent-coder";
         };
->>>>>>> Stashed changes
       }
     );
 }
+# # ── 2. Customizations from this repo (extensions, lib, skills, AGENTS.md) ──
+# # workspaceDeps already deployed @vt-pi/agent-lord as a self-contained
+# # tree (extensions/lib/skills/AGENTS.md + a node_modules with every
+# # @vt-pi/* and real dependency fully materialized) — just copy it.
+# piCustomizations = pkgs.runCommand "pi-customizations" { } ''
+#   cp -r ${workspaceDeps}/agent-lord $out
+#   chmod -R u+w $out
+# '';
+
+# # ── 3. Final Pi package (base + customizations) ───────────────────────
+# pi =
+#   pkgs.runCommand "pi-with-customizations"
+#     {
+#       nativeBuildInputs = [ pkgs.makeWrapper ];
+#       passthru = {
+#         inherit piBase piCustomizations;
+#       };
+#       meta = piBase.meta // {
+#         description = "Pi coding agent with custom extensions and configuration";
+#       };
+#     }
+#     ''
+#       # Copy the base pi package
+#       cp -r ${piBase} $out
+#       chmod -R u+w $out
+#
+#       # Add customizations to share/pi/
+#       mkdir -p $out/share/pi
+#       cp -r ${piCustomizations}/extensions $out/share/pi/extensions
+#       cp -r ${piCustomizations}/lib $out/share/pi/lib
+#       cp -r ${piCustomizations}/skills $out/share/pi/skills
+#       cp ${piCustomizations}/AGENTS.md $out/share/pi/AGENTS.md
+#
+#       # Same node_modules (real deps + @vt-pi/* deployed packages) as
+#       # piCustomizations, so extensions can resolve them at runtime too.
+#       cp -r ${piCustomizations}/node_modules $out/share/pi/node_modules
+#       chmod -R u+w $out/share/pi/node_modules
+#
+#       # Build --extension / --skill flags for every bundled item.
+#       # Skip test files (*.test.ts) - they're for build-time validation only.
+#       extra_flags=""
+#       for ext in $out/share/pi/extensions/*; do
+#         case "$(basename "$ext")" in
+#           *.test.ts) ;; # Skip test files
+#           *) extra_flags="$extra_flags --extension $ext" ;;
+#         esac
+#       done
+#       for skill in $out/share/pi/skills/*; do
+#         extra_flags="$extra_flags --skill $skill"
+#       done
+#
+#       # Include the credential helper binary
+#       cp ${lotdCredentialHelper}/bin/lotd-credential-helper $out/bin/lotd-credential-helper
+#       cp ${lotdToken}/bin/lotd-token $out/bin/lotd-token
+#
+#       # Replace the wrapper: go back to node directly.
+#       rm $out/bin/pi
+#       makeWrapper "${nodejs}/bin/node" "$out/bin/pi" \
+#         --run '[ -n "$LOTD_CONFIG_FILE" ] || { echo "pi: LOTD_CONFIG_FILE must be set" >&2; exit 1; }' \
+#         --run '[ -f "$LOTD_CONFIG_FILE" ] || { echo "pi: config file not found: $LOTD_CONFIG_FILE" >&2; exit 1; }' \
+#         --run 'export LOTD_CONFIG_FILE="$(cd "$(dirname "$LOTD_CONFIG_FILE")" && pwd)/$(basename "$LOTD_CONFIG_FILE")"' \
+#         --prefix PATH : ${git}/bin \
+#         --prefix PATH : ${gh}/bin \
+#         --add-flags "$out/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js $extra_flags --append-system-prompt $out/share/pi/AGENTS.md"
+#     '';
+
+# # The code-writer (default). Full toolset, agent-lord's extensions.
+# pi = mkPiAgent {
+#   name = "pi-with-customizations";
+#   tree = piCustomizations;
+#   description = "Pi coding agent with custom extensions and configuration";
+# };

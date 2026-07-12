@@ -147,7 +147,7 @@ vt-pi/
     │   ├── AGENTS.md           # System prompt (bundled into binary)
     │   ├── extensions/
     │   │   ├── advisor/        # Wires the advisor tool into @vt-pi/agent-advisor
-    │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
+    │   │   ├── command-policy/ # Wires an inline entries array into @vt-pi/command-policy
     │   │   ├── explore/        # Wires the explore tool into @vt-pi/agent-explorer
     │   │   ├── fix-ci/         # push_and_check_ci tool
     │   │   ├── git-commit/     # git_commit tool

@@ -7,7 +7,7 @@
  * attempt limit.
  *
  * Manual `git push` in bash is blocked by the command-policy extension
- * (COMMAND_POLICY_ENTRIES bans the "git push" subcommand), not here.
+ * (its `entries` array bans the "git push" subcommand), not here.
  */
 import { createFixCiExtension } from "@vt-pi/fix-ci";
 
