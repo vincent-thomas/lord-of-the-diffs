@@ -14,20 +14,32 @@ import type { CommandPolicyEntry } from "./types.ts";
 import { evaluateCommand } from "./matching.ts";
 
 export interface CommandPolicyOptions {
-	entries: CommandPolicyEntry[];
+  entries: CommandPolicyEntry[];
 }
 
+const COMMAND_POLICY_SYSTEM_PROMPT = `
+Only run shell commands that are explicitly allowed by the command policy.
+The policy can allow or ban commands by command, subcommand, and flag.
+When a command is banned, follow the policy description for what to do instead.
+Prefer Pi tools over shell commands when possible: use read for file contents,
+write/edit for file changes, rg for search, and fd for file discovery.
+`;
+
 export function createCommandPolicyExtension(options: CommandPolicyOptions) {
-	return function (pi: ExtensionAPI) {
-		pi.on("tool_call", async (event, ctx) => {
-			if (!isToolCallEventType("bash", event)) return;
+  return function (pi: ExtensionAPI) {
+    pi.on("before_agent_start", async (event) => ({
+      systemPrompt: event.systemPrompt + COMMAND_POLICY_SYSTEM_PROMPT,
+    }));
 
-			const command = event.input.command ?? "";
-			const violation = evaluateCommand(command, options.entries);
-			if (!violation) return;
+    pi.on("tool_call", async (event, ctx) => {
+      if (!isToolCallEventType("bash", event)) return;
 
-			if (ctx.hasUI) ctx.ui.notify(violation.notify, "warning");
-			return { block: true, reason: violation.reason };
-		});
-	};
+      const command = event.input.command ?? "";
+      const violation = evaluateCommand(command, options.entries);
+      if (!violation) return;
+
+      if (ctx.hasUI) ctx.ui.notify(violation.notify, "warning");
+      return { block: true, reason: violation.reason };
+    });
+  };
 }
