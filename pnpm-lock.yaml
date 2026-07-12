@@ -33,6 +33,9 @@ importers:
       '@mariozechner/pi-coding-agent':
         specifier: '*'
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/agent-planner':
+        specifier: workspace:*
+        version: link:../agent-planner
       typebox:
         specifier: ^1.1.24
         version: 1.3.6

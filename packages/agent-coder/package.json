@@ -9,6 +9,7 @@
 	},
 	"dependencies": {
 		"@mariozechner/pi-coding-agent": "*",
+		"@vt-pi/agent-planner": "workspace:*",
 		"typebox": "^1.1.24"
 	},
 	"devDependencies": {
