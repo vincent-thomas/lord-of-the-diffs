@@ -9,8 +9,8 @@
  * - resourceLoader has all discovery (extensions, skills, AGENTS.md, context
  *   files) turned off, so it never inherits agent-lord's own extensions,
  *   system prompt, or skills. That would both bloat its context and re-enable
- *   behavior (e.g. commit-enforcer's nags) that make no sense for a session
- *   that can't write or run commands.
+ *   behavior that makes no sense for a session that can't write or run
+ *   commands.
  * - default model is a cheap/fast one, independent of whatever model
  *   agent-lord itself is running — the whole point of delegating.
  */
