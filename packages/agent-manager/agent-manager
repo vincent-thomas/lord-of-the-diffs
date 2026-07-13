@@ -52,11 +52,23 @@ echo ""
 
 WHAT=$(jq -r '.what' "$PLAN_FILE")
 WHY=$(jq -r '.why' "$PLAN_FILE")
+BRANCH_NAME=$(jq -r '.branchName' "$PLAN_FILE")
 TASK_COUNT=$(jq '.tasks | length' "$PLAN_FILE")
+
+# Validate worktree is clean before proceeding
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo ""
+  echo "✗ Working directory has uncommitted changes"
+  echo "Commit or stash your changes before running agent-manager"
+  rm -f "$PLAN_FILE"
+  exit 1
+fi
 
 echo "What: $WHAT"
 echo ""
 echo "Why: $WHY"
+echo ""
+echo "Branch: $BRANCH_NAME"
 echo ""
 echo "Tasks ($TASK_COUNT):"
 
@@ -84,6 +96,20 @@ fi
 echo ""
 echo "✓ Plan accepted"
 echo ""
+
+# Switch to or create the branch
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" != "$BRANCH_NAME" ]]; then
+  if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
+    echo "Switching to existing branch: $BRANCH_NAME"
+    git checkout "$BRANCH_NAME"
+  else
+    echo "Creating new branch: $BRANCH_NAME"
+    git checkout -b "$BRANCH_NAME"
+  fi
+  echo ""
+fi
+
 echo "┌─ Step 2: Implementation"
 echo "└─ Running agent-coder for each task..."
 echo ""

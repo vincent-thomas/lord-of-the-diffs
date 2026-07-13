@@ -51,6 +51,12 @@ export default function (pi: ExtensionAPI) {
           "Why the change is needed — the problem, context, or goal it serves, so " +
           "a reader understands the motivation without any external context.",
       }),
+      branchName: TString({
+        description:
+          "Git branch name for this work (following vt_<name> convention). " +
+          "Use descriptive names with underscores, e.g., 'vt_add_user_auth', " +
+          "'vt_fix_validation_bug'. This branch will be created if it doesn't exist.",
+      }),
       tasks: TArray(
         TObject({
           title: TString({ description: "Imperative one-line summary." }),

@@ -5,6 +5,7 @@
  * These functions define the plan artifact's shape and integrity rules — the
  * contract the implementation phase consumes — independent of how it's emitted.
  */
+import { execSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
 
 export interface PlanTask {
@@ -30,6 +31,11 @@ export interface Plan {
    * reader understands the motivation without any external context.
    */
   why: string;
+  /**
+   * Git branch name for this work — the branch that will be created or switched
+   * to before implementation begins.
+   */
+  branchName: string;
   /**
    * The single-piece tasks. This is an ordered list: the tasks land as a flat,
    * linear commit history, so array position IS the implementation/commit order
@@ -62,6 +68,24 @@ export function validatePlan(plan: Plan): string[] {
   if (!plan.why?.trim()) {
     errors.push("Plan is missing `why` (the motivation for the change).");
   }
+  if (!plan.branchName?.trim()) {
+    errors.push("Plan is missing `branchName` (the git branch for this work).");
+  }
+
+  if (plan.branchName?.trim()) {
+    try {
+      execSync(`git check-ref-format --branch '${plan.branchName.trim().replace(/'/g, "'\\''")}'`, {
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      });
+    } catch {
+      errors.push(
+        `Branch name "${plan.branchName}" is invalid (git ref-name rules). ` +
+        `Use letters, numbers, underscores, hyphens. Avoid special characters.`
+      );
+    }
+  }
+
   if (tasks.length === 0) {
     errors.push("Plan has no tasks.");
   }

@@ -22,25 +22,26 @@ test("validatePlan accepts a well-formed plan", () => {
   const plan: Plan = {
     what: "w",
     why: "y",
+    branchName: "vt_test_feature",
     tasks: [task(), task({ title: "Second" })],
   };
   assert.deepEqual(validatePlan(plan), []);
 });
 
 test("validatePlan rejects an empty task list", () => {
-  assert.deepEqual(validatePlan({ what: "w", why: "y", tasks: [] }), [
+  assert.deepEqual(validatePlan({ what: "w", why: "y", branchName: "vt_test", tasks: [] }), [
     "Plan has no tasks.",
   ]);
 });
 
 test("validatePlan flags a missing what or why", () => {
-  const errors = validatePlan({ what: "  ", why: "", tasks: [task()] });
+  const errors = validatePlan({ what: "  ", why: "", branchName: "vt_test", tasks: [task()] });
   assert.ok(errors.some((e) => /`what`/.test(e)));
   assert.ok(errors.some((e) => /`why`/.test(e)));
 });
 
 test("serializePlan is stable, indented, newline-terminated JSON", () => {
-  const out = serializePlan({ what: "w", why: "y", tasks: [task()] });
+  const out = serializePlan({ what: "w", why: "y", branchName: "vt_test", tasks: [task()] });
   assert.ok(out.endsWith("\n"));
   assert.equal(JSON.parse(out).tasks[0].title, "Do the thing");
   assert.match(out, /\n {2}"what"/);
@@ -66,4 +67,25 @@ test("resolveOutputPath falls back to the default filename under cwd", () => {
     resolveOutputPath("   ", "/repo"),
     `/repo/${DEFAULT_PLAN_FILENAME}`,
   );
+});
+
+test("validatePlan rejects missing branchName", () => {
+  const errors = validatePlan({ what: "w", why: "y", branchName: "", tasks: [task()] });
+  assert.ok(errors.some((e) => /`branchName`/.test(e)));
+});
+
+test("validatePlan rejects invalid git ref names", () => {
+  const invalidNames = ["foo..bar", "foo bar", "~foo", "foo^bar"];
+  for (const name of invalidNames) {
+    const errors = validatePlan({ what: "w", why: "y", branchName: name, tasks: [task()] });
+    assert.ok(errors.length > 0, `Should reject invalid branch name: ${name}`);
+  }
+});
+
+test("validatePlan accepts valid branch names", () => {
+  const validNames = ["vt_add_feature", "feature-123", "bug/fix-thing"];
+  for (const name of validNames) {
+    const errors = validatePlan({ what: "w", why: "y", branchName: name, tasks: [task()] });
+    assert.ok(!errors.some((e) => /branchName/.test(e)), `Should accept valid branch name: ${name}`);
+  }
 });
