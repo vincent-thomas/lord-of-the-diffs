@@ -73,18 +73,9 @@
             pkgs.git
           ];
 
-          buildPhase = ''
-            runHook preBuild
-            pnpm --reporter=append-only -r run build
-            runHook postBuild
-          '';
+          buildPhase = ":";
 
-          doCheck = true;
-          checkPhase = ''
-            runHook preCheck
-            pnpm --reporter=append-only -r test
-            runHook postCheck
-          '';
+          doCheck = false;
         };
         #
 
@@ -106,15 +97,16 @@
 
               pnpmDeps = workspaceDeps.pnpmDeps;
 
-              preConfigure = ''
-                export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-planner... --include-workspace-root"
-                export NODE_ENV="development"
-              '';
-
               buildPhase = ''
                 runHook preBuild
                 pnpm --reporter=append-only --filter=@vt-pi/agent-planner... run build
                 runHook postBuild
+              '';
+
+              checkPhase = ''
+                runHook preCheck
+                pnpm --reporter=append-only --filter=@vt-pi/agent-planner... run test
+                runHook postCheck
               '';
 
               installPhase = ''
@@ -163,15 +155,16 @@
 
               pnpmDeps = workspaceDeps.pnpmDeps;
 
-              preConfigure = ''
-                export PNPM_INSTALL_FLAGS="--frozen-lockfile --filter=@vt-pi/agent-coder... --include-workspace-root"
-                export NODE_ENV="development"
-              '';
-
               buildPhase = ''
                 runHook preBuild
                 pnpm --reporter=append-only --filter=@vt-pi/agent-coder... run build
                 runHook postBuild
+              '';
+
+              checkPhase = ''
+                runHook preCheck
+                pnpm --reporter=append-only --filter=@vt-pi/agent-coder... run test
+                runHook postCheck
               '';
 
               installPhase = ''
