@@ -6,102 +6,102 @@ import { test, suite } from "node:test";
 import assert from "node:assert/strict";
 import { hasFileWriteRedirection } from "./logic.ts";
 
-suite("no-file-writes — file write redirection detection");
+suite("no-file-writes — file write redirection detection", () => {
+	const shouldBlock = [
+		"echo 'content' >> file.txt",
+		"printf 'data' > output.rs",
+		"cat input.txt > output.txt",
+		"ls -la > listing.txt",
+		"echo foo >> /tmp/log.txt",
+		"printf '\\ncode\\n' >> src/main.rs",
+		"command arg1 arg2 > result.json",
+		"FOO=bar echo test >> data.txt",
+		"env echo x > file",
+		"echo 'multi\nline' >> app.log",
+		// No space between operator and target (valid bash).
+		"echo hi >file",
+		"echo hi >>file",
+		"printf '%s' >out.json",
+		"cmd arg >/tmp/out",
+		"cmd arg >>/tmp/log",
+		// File-descriptor-prefixed redirects (2>file, 1>>file).
+		"cmd 2>file",
+		"cmd 2> file",
+		"cmd 1>>file",
+		"cmd 1>> file",
+		"cmd 2>/tmp/errors.log",
+		"build 3>output.txt",
+		"cmd 2>&1 3>trace.log",
+		// No space *before* the operator either (valid bash: `hi>file` redirects).
+		"echo hi>file.txt",
+		"echo hi>>log.txt",
+		"cat a.txt>b.txt",
+		"cmd arg 2>>errors.log",
+		// &> / &>> redirect stdout+stderr to a file; the `&` before `>` must not
+		// hide the operator.
+		"echo hi&>file.txt",
+		"echo hi &> file.txt",
+		"echo hi&>>log.txt",
+		// A real redirection following a quoted arg that itself contains `>`.
+		'echo "score > threshold" > result.txt',
+		// Quoted redirection targets are still real file writes — quoting a
+		// filename must not bypass detection.
+		'echo hi > "file.txt"',
+		"echo hi > 'file.txt'",
+		'echo hi >> "output.log"',
+		'echo "some text" > "real_file.txt"',
+	];
 
-const shouldBlock = [
-	"echo 'content' >> file.txt",
-	"printf 'data' > output.rs",
-	"cat input.txt > output.txt",
-	"ls -la > listing.txt",
-	"echo foo >> /tmp/log.txt",
-	"printf '\\ncode\\n' >> src/main.rs",
-	"command arg1 arg2 > result.json",
-	"FOO=bar echo test >> data.txt",
-	"env echo x > file",
-	"echo 'multi\nline' >> app.log",
-	// No space between operator and target (valid bash).
-	"echo hi >file",
-	"echo hi >>file",
-	"printf '%s' >out.json",
-	"cmd arg >/tmp/out",
-	"cmd arg >>/tmp/log",
-	// File-descriptor-prefixed redirects (2>file, 1>>file).
-	"cmd 2>file",
-	"cmd 2> file",
-	"cmd 1>>file",
-	"cmd 1>> file",
-	"cmd 2>/tmp/errors.log",
-	"build 3>output.txt",
-	"cmd 2>&1 3>trace.log",
-	// No space *before* the operator either (valid bash: `hi>file` redirects).
-	"echo hi>file.txt",
-	"echo hi>>log.txt",
-	"cat a.txt>b.txt",
-	"cmd arg 2>>errors.log",
-	// &> / &>> redirect stdout+stderr to a file; the `&` before `>` must not
-	// hide the operator.
-	"echo hi&>file.txt",
-	"echo hi &> file.txt",
-	"echo hi&>>log.txt",
-	// A real redirection following a quoted arg that itself contains `>`.
-	'echo "score > threshold" > result.txt',
-	// Quoted redirection targets are still real file writes — quoting a
-	// filename must not bypass detection.
-	'echo hi > "file.txt"',
-	"echo hi > 'file.txt'",
-	'echo hi >> "output.log"',
-	'echo "some text" > "real_file.txt"',
-];
+	for (const cmd of shouldBlock) {
+		test(`blocks: ${cmd}`, () => {
+			const result = hasFileWriteRedirection(cmd);
+			assert.ok(result.found, `expected to block ${cmd}`);
+			assert.ok(result.segment, `expected segment for ${cmd}`);
+		});
+	}
 
-for (const cmd of shouldBlock) {
-	test(`blocks: ${cmd}`, () => {
-		const result = hasFileWriteRedirection(cmd);
-		assert.ok(result.found, `expected to block ${cmd}`);
-		assert.ok(result.segment, `expected segment for ${cmd}`);
+	test("reports the real filename (not a masked placeholder) for a quoted target", () => {
+		const result = hasFileWriteRedirection('echo hi > "file.txt"');
+		assert.equal(result.segment, '> "file.txt"');
 	});
-}
 
-test("reports the real filename (not a masked placeholder) for a quoted target", () => {
-	const result = hasFileWriteRedirection('echo hi > "file.txt"');
-	assert.equal(result.segment, '> "file.txt"');
+	const shouldPass = [
+		"echo 'status message'",
+		"printf 'debugging: %s' $VAR",
+		"ls | grep foo",
+		"cat file | wc -l",
+		"echo test > /dev/null",
+		"command 2> /dev/stderr",
+		"build 1>&2",
+		"test >&1",
+		// No-space forms targeting excluded targets — still fine.
+		"echo hi >/dev/null",
+		"echo hi >>/dev/null",
+		"cmd >&1",
+		// …including with no space before the operator.
+		"echo hi>/dev/null",
+		"echo hi>>/dev/null",
+		"cmd arg>&2",
+		"foo 2>&1",
+		"cmd&>/dev/null",
+		// Quoting an excluded target doesn't change what it resolves to.
+		'echo hi > "/dev/null"',
+		"echo hi > '/dev/null'",
+		"grep pattern files",
+		"echo concatenate things",
+		"which printf",
+		"man echo",
+		// `>` inside a quoted string is text, not a redirection.
+		'echo "score > threshold"',
+		'git commit -m "value > 5 means pass"',
+		"echo 'a >> b'",
+		`rg "foo>bar" file.txt`,
+	];
+
+	for (const cmd of shouldPass) {
+		test(`allows: ${cmd}`, () => {
+			const result = hasFileWriteRedirection(cmd);
+			assert.equal(result.found, false, `should not block ${cmd}`);
+		});
+	}
 });
-
-const shouldPass = [
-	"echo 'status message'",
-	"printf 'debugging: %s' $VAR",
-	"ls | grep foo",
-	"cat file | wc -l",
-	"echo test > /dev/null",
-	"command 2> /dev/stderr",
-	"build 1>&2",
-	"test >&1",
-	// No-space forms targeting excluded targets — still fine.
-	"echo hi >/dev/null",
-	"echo hi >>/dev/null",
-	"cmd >&1",
-	// …including with no space before the operator.
-	"echo hi>/dev/null",
-	"echo hi>>/dev/null",
-	"cmd arg>&2",
-	"foo 2>&1",
-	"cmd&>/dev/null",
-	// Quoting an excluded target doesn't change what it resolves to.
-	'echo hi > "/dev/null"',
-	"echo hi > '/dev/null'",
-	"grep pattern files",
-	"echo concatenate things",
-	"which printf",
-	"man echo",
-	// `>` inside a quoted string is text, not a redirection.
-	'echo "score > threshold"',
-	'git commit -m "value > 5 means pass"',
-	"echo 'a >> b'",
-	`rg "foo>bar" file.txt`,
-];
-
-for (const cmd of shouldPass) {
-	test(`allows: ${cmd}`, () => {
-		const result = hasFileWriteRedirection(cmd);
-		assert.equal(result.found, false, `should not block ${cmd}`);
-	});
-}
