@@ -4,10 +4,24 @@ set -euo pipefail
 # agent-manager — simple orchestrator for planner → user approval → coder
 #
 # Usage: agent-manager "Add user authentication"
+#
+# Environment: Requires LOTD_CONFIG_FILE for GitHub App authentication
 
 if [[ $# -eq 0 ]]; then
   echo "Usage: agent-manager <prompt>"
   echo "Example: agent-manager \"Add user authentication\""
+  exit 1
+fi
+
+# Validate LOTD_CONFIG_FILE
+if [[ -z "${LOTD_CONFIG_FILE:-}" ]]; then
+  echo "Error: LOTD_CONFIG_FILE environment variable not set" >&2
+  echo "This is required for git authentication as the GitHub App identity" >&2
+  exit 1
+fi
+
+if [[ ! -f "$LOTD_CONFIG_FILE" ]]; then
+  echo "Error: LOTD_CONFIG_FILE points to non-existent file: $LOTD_CONFIG_FILE" >&2
   exit 1
 fi
 
