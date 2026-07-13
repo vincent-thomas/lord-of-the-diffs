@@ -366,6 +366,10 @@
             echo "│  $TASK_TITLE"
             echo -e "└─ Starting agent...\n"
 
+            # Ensure the commit-task extension's git add/commit calls resolve to
+            # the wrapped git (lord-of-the-diffs identity from LOTD_CONFIG_FILE).
+            export PATH=${git}/bin:$PATH
+
             # Call Pi with the prompt and extensions
             exec ${nodejs}/bin/node ${piBase}/lib/node_modules/@earendil-works/pi-coding-agent/dist/cli.js \
               --extension ${coderCustomizations}/coder/dist/extensions/commit-task \
