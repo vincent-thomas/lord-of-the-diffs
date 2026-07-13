@@ -30,60 +30,17 @@
         # Prints just the raw token to stdout.
         lotdToken = import ./nix/lotd-token.nix { inherit pkgs; };
 
-        # ── Git credential helper (calls lotd-token) ─────────────────────────
-        # Git invokes this on-demand; wraps the raw token in credential protocol.
-        lotdCredentialHelper = pkgs.writeShellScriptBin "lotd-credential-helper" ''
-          set -eu
-          printf 'username=x-access-token\npassword=%s\n' "$(${lotdToken}/bin/lotd-token)"
-        '';
-
-        # ── Git with credential helper + HTTPS enforcement ──────────────────
-        gitconfig = pkgs.writeText "gitconfig" ''
-          [credential]
-              helper = ${lotdCredentialHelper}/bin/lotd-credential-helper
-          [url "https://"]
-              insteadOf = git://
-          [url "https://github.com/"]
-              insteadOf = git@github.com:
-              insteadOf = ssh://git@github.com/
-        '';
-
-        git = pkgs.writeShellScriptBin "git" ''
-          set -eu
-
-          CONFIG=''${LOTD_CONFIG_FILE:-}
-          if [ -z "$CONFIG" ]; then
-            echo "git: LOTD_CONFIG_FILE not set" >&2
-            exit 1
-          fi
-
-          LOGIN=$(${pkgs.jq}/bin/jq -r '.login' "$CONFIG")
-          if [ -z "$LOGIN" ] || [ "$LOGIN" = "null" ]; then
-            echo "git: missing or null 'login' in config" >&2
-            exit 1
-          fi
-
-          USER_ID=$(${gh}/bin/gh api "/users/$LOGIN" --jq '.id')
-          if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
-            echo "git: failed to get user ID for '$LOGIN'" >&2
-            exit 1
-          fi
-
-          export GIT_AUTHOR_NAME="$LOGIN"
-          export GIT_AUTHOR_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
-          export GIT_COMMITTER_NAME="$LOGIN"
-          export GIT_COMMITTER_EMAIL="$USER_ID+$LOGIN@users.noreply.github.com"
-          export GIT_CONFIG_SYSTEM=${gitconfig}
-
-          exec ${pkgs.git}/bin/git "$@"
-        '';
-
         # ── gh wrapper with automated GitHub App auth ────────────────────────
         gh = pkgs.writeShellScriptBin "gh" ''
           set -eu
           export GH_TOKEN=$(${lotdToken}/bin/lotd-token)
           exec ${pkgs.gh}/bin/gh "$@"
         '';
+
+        # ── Git with credential helper + HTTPS enforcement ──────────────────
+        # Wraps git so commits use the GitHub App identity and remotes go
+        # over HTTPS with a token-based credential helper.
+        git = import ./nix/git.nix { inherit pkgs lotdToken gh; };
 
         # ── 1. Base Pi package (upstream, no customizations) ─────────────────────
         piBase = import ./nix/pi.nix { inherit pkgs nodejs pi-mono; };
@@ -362,12 +319,25 @@
             Begin implementing. Read the relevant code first.
             EOF
 
+            # Validate LOTD_CONFIG_FILE
+            if [ -z "''${LOTD_CONFIG_FILE:-}" ]; then
+              echo "Error: LOTD_CONFIG_FILE environment variable not set" >&2
+              echo "This is required for git authentication as the GitHub App identity" >&2
+              exit 1
+            fi
+
+            if [ ! -f "$LOTD_CONFIG_FILE" ]; then
+              echo "Error: LOTD_CONFIG_FILE points to non-existent file: $LOTD_CONFIG_FILE" >&2
+              exit 1
+            fi
+
             echo -e "\n┌─ Task $((TASK_INDEX + 1))/$TASK_COUNT"
             echo "│  $TASK_TITLE"
             echo -e "└─ Starting agent...\n"
 
             # Ensure the commit-task extension's git add/commit calls resolve to
             # the wrapped git (lord-of-the-diffs identity from LOTD_CONFIG_FILE).
+            export LOTD_CONFIG_FILE
             export PATH=${git}/bin:$PATH
 
             # Call Pi with the prompt and extensions
