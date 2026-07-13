@@ -30,12 +30,13 @@ vt-pi/
     │   │                       # pnpm workspace member (@vt-pi/agent-lord) covering both lib/
     │   │                       # and extensions/*; they reference each other with relative imports
     │   ├── AGENTS.md           # System prompt shipped with the binary
-    │   ├── extensions/         # One subdirectory per extension
+    │   ├── extensions/         # One entry per extension — a directory or a single wiring .ts file
+    │   │   ├── advisor.ts      # Wires advisor tool from @vt-pi/agent-advisor
     │   │   ├── command-policy/ # Wires COMMAND_POLICY_ENTRIES into @vt-pi/command-policy
-    │   │   ├── fix-ci/         # Wires push_and_check_ci tool from @vt-pi/fix-ci
+    │   │   ├── explore.ts      # Wires explore tool from @vt-pi/agent-explorer
+    │   │   ├── fix-ci.ts       # Wires push_and_check_ci tool from @vt-pi/fix-ci
     │   │   ├── git-commit/     # git_commit tool; blocks git commit in bash
     │   │   ├── no-file-writes/ # Blocks >, >> shell redirections to files
-    │   │   ├── sandbox/        # /sandbox command for read-only mode
     │   │   └── write-guard/    # Blocks write on existing files > 50 lines
     │   ├── lib/                # Pure logic shared across extensions
     │   │   ├── exec-async.ts
@@ -43,6 +44,12 @@ vt-pi/
     │   │   ├── precheck.ts
     │   │   └── shell-quote.ts
     │   └── skills/              # Skill definitions (populated at build time)
+    ├── agent-advisor/           # @vt-pi/agent-advisor — advisor tool (consult a stronger sub-agent)
+    ├── agent-coder/             # @vt-pi/agent-coder
+    ├── agent-explorer/          # @vt-pi/agent-explorer — explore tool (read-only sub-agent search)
+    ├── agent-manager/           # @vt-pi/agent-manager
+    ├── agent-planner/           # @vt-pi/agent-planner
+    ├── agent-validator/         # @vt-pi/agent-validator
     ├── command-policy/          # @vt-pi/command-policy — shell command allow-list engine
     └── fix-ci/                  # @vt-pi/fix-ci — push_and_check_ci tool (push, PR, poll CI)
 ```
@@ -50,18 +57,25 @@ vt-pi/
 ## How extensions are structured
 
 Each extension under `packages/agent-lord/extensions/` exports a default function that takes a
-Pi `ExtensionAPI`. Extensions use three main APIs:
+Pi `ExtensionAPI`. An extension is either a directory (`<name>/index.ts`
+plus a `logic.ts`/`logic.test.ts` when it has testable logic of its own) or
+a single thin wiring `.ts` file that just re-exports the default from a
+`create*Extension()` factory living in a `@vt-pi/*` package (e.g.
+`advisor.ts`, `explore.ts`, `fix-ci.ts` each do `export default
+create…Extension()`). Extensions use three main APIs:
 
 - `pi.registerTool(name, { parameters, execute })` — registers a tool the agent can invoke
-- `pi.registerCommand(name, { handler })` — registers a slash command like `/sandbox`
+- `pi.registerCommand(name, { handler })` — registers a slash command
 - `pi.on("tool_call" | "before_agent_start" | "agent_end", handler)` — lifecycle hooks
 
 The `packages/agent-lord/lib/` directory holds shared code, imported via relative paths (e.g.
 `../../lib/git-utils.ts`) since `lib/` and `extensions/*` are part of
 the same pnpm workspace member (`@vt-pi/agent-lord`, `packages/agent-lord/package.json`). **No Pi
 imports allowed in lib/** — it must stay pure TypeScript so it can be
-imported from any extension's logic module. Extensions should keep Pi
-imports in `index.ts` and put testable logic in their own `logic.ts`.
+imported from any extension's logic module. Directory-style extensions should keep Pi
+imports in `index.ts` and put testable logic in their own `logic.ts`; a
+wiring-file extension keeps its logic (and tests) inside the package whose
+factory it wires.
 
 ## pnpm workspaces and packages/
 
@@ -72,9 +86,11 @@ tree). Workspace-local dependencies (e.g. `@vt-pi/agent-lord`'s dependency on
 links them locally instead of trying to fetch them from the registry.
 Workspace members are plain TypeScript with no build step for anything
 consumed by *relative* import — Node's native type-stripping runs `.ts`
-files directly, both in `nix build` and via `node --test`. The four leaf
-`@vt-pi/*` packages (`command-policy`, `agent-advisor`, `agent-explorer`,
-`fix-ci`) are the exception: they're consumed from `agent-lord` by *package name*
+files directly, both in `nix build` and via `node --test`. The leaf
+`@vt-pi/*` packages (`agent-advisor`, `agent-coder`, `agent-explorer`,
+`agent-manager`, `agent-planner`, `agent-validator`, `command-policy`,
+`fix-ci` — every `packages/*` member except `agent-lord` itself) are the
+exception: they're consumed from `agent-lord` by *package name*
 through `node_modules`, and Node refuses to type-strip a `.ts` file whose
 real path resolves under any `node_modules` directory. So each has a
 `tsconfig.json` (extending the root `tsconfig.base.json`) and a `build: tsc`
@@ -133,7 +149,7 @@ importing across that boundary.
 install` against the root workspace (`fetchPnpmDeps` + `pnpmConfigHook`,
 mirroring the `buildNpmPackage` + `npmDepsHash` pattern `piBase` uses for its
 own deps) to resolve real external dependencies declared by any workspace
-package. It then builds the four `@vt-pi/*` leaf packages (`pnpm -r run
+package. It then builds the `@vt-pi/*` leaf packages (`pnpm -r run
 build`, see above) and runs `pnpm --filter=@vt-pi/agent-lord deploy` to
 produce a self-contained `agent-lord/` tree: its own
 `extensions/lib/skills/AGENTS.md` alongside a `node_modules` where every
@@ -170,9 +186,14 @@ nix flake update       # Update upstream pi and nixpkgs inputs
 
 ## Adding a new extension
 
-1. Create `packages/agent-lord/extensions/<name>/index.ts` (and `logic.ts` for testable logic)
+1. Create `packages/agent-lord/extensions/<name>/index.ts` (and `logic.ts` for testable logic).
+   If the extension is just wiring a package's `create*Extension()` factory,
+   a single `packages/agent-lord/extensions/<name>.ts` that does `export
+   default create…Extension()` is enough (see `advisor.ts`, `explore.ts`,
+   `fix-ci.ts`).
 2. Import from `../../lib/` for shared helpers
-3. Add a `logic.test.ts` alongside your logic — tests run on build
+3. Add a `logic.test.ts` alongside your logic — tests run on build (for a
+   wiring-file extension, the tests live in the package it wires)
 4. Run `nix build` — the flake auto-discovers and registers new extensions
 5. No manual registration step needed
 

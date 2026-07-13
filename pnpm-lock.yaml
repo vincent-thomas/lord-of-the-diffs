@@ -78,6 +78,8 @@ importers:
         specifier: workspace:*
         version: file:packages/fix-ci(ws@8.21.0)(zod@4.4.3)
 
+  packages/agent-manager: {}
+
   packages/agent-planner:
     dependencies:
       '@mariozechner/pi-ai':
@@ -102,9 +104,15 @@ importers:
       '@mariozechner/pi-coding-agent':
         specifier: '*'
         version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@sinclair/typebox':
+        specifier: '*'
+        version: 0.34.52
+      '@vt-pi/agent-planner':
+        specifier: workspace:*
+        version: link:../agent-planner
       '@vt-pi/fix-ci':
         specifier: workspace:*
-        version: link:../fix-ci
+        version: file:packages/fix-ci(ws@8.21.0)(zod@4.4.3)
 
   packages/command-policy:
     dependencies:
@@ -367,6 +375,9 @@ packages:
 
   '@silvia-odwyer/photon-node@0.3.4':
     resolution: {integrity: sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA==}
+
+  '@sinclair/typebox@0.34.52':
+    resolution: {integrity: sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw==}
 
   '@smithy/core@3.29.2':
     resolution: {integrity: sha512-DXUk6yU0C1Q1tYvJh1VCtl8QOBcSoZpKwjTPkxT6A4MUQYHvgeKGByL8mrEdxnvhdf9nq5GyzmRb5n/vPgu3Lw==}
@@ -1414,6 +1425,8 @@ snapshots:
   '@protobufjs/utf8@1.1.2': {}
 
   '@silvia-odwyer/photon-node@0.3.4': {}
+
+  '@sinclair/typebox@0.34.52': {}
 
   '@smithy/core@3.29.2':
     dependencies:
