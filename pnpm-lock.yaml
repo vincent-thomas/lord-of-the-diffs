@@ -97,6 +97,15 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  packages/agent-validator:
+    dependencies:
+      '@mariozechner/pi-coding-agent':
+        specifier: '*'
+        version: 0.73.1(ws@8.21.0)(zod@4.4.3)
+      '@vt-pi/fix-ci':
+        specifier: workspace:*
+        version: link:../fix-ci
+
   packages/command-policy:
     dependencies:
       '@mariozechner/pi-coding-agent':

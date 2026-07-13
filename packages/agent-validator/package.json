@@ -1,0 +1,20 @@
+{
+  "name": "@vt-pi/agent-validator",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "agent-validator": "./index.ts"
+  },
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "build": "echo 'No build needed - using native TS'"
+  },
+  "dependencies": {
+		"@mariozechner/pi-coding-agent": "*",
+    "@vt-pi/agent-planner": "workspace:*",
+    "@vt-pi/fix-ci": "workspace:*",
+    "@sinclair/typebox": "*"
+  }
+}

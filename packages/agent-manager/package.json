@@ -1,0 +1,8 @@
+{
+  "name": "@vt-pi/agent-manager",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "agent-manager": "./agent-manager"
+  }
+}
