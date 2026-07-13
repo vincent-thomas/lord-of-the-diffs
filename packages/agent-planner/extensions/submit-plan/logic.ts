@@ -49,7 +49,7 @@ export interface Plan {
 export const PLAN_OUTPUT_ENV = "PLANNER_OUTPUT";
 
 /** Default artifact filename, relative to the planner's cwd. */
-export const DEFAULT_PLAN_FILENAME = "plan.json";
+export const DEFAULT_PLAN_FILENAME = "../plan.json";
 
 /**
  * Integrity checks the plan must pass before it's written. Returns a list of
@@ -100,7 +100,7 @@ export function serializePlan(plan: Plan): string {
 
 /**
  * Resolve where to write the artifact: the PLANNER_OUTPUT env value if set,
- * else plan.json; relative paths are anchored at the planner's cwd so the
+ * else ../plan.json; relative paths are anchored at the planner's cwd so the
  * orchestrator gets a predictable absolute location.
  */
 export function resolveOutputPath(

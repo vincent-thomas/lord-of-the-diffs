@@ -3,12 +3,12 @@
  * agent-planner CLI
  *
  * Read-only planning agent that decomposes a feature request into single-task
- * implementation steps. Outputs plan.json.
+ * implementation steps. Outputs ../plan.json.
  *
  * Usage:
  *   agent-planner "Add user authentication"
  *   agent-planner "Add user authentication" --model=anthropic/claude-sonnet-4-6
- *   agent-planner "Add user authentication" --output=plan.json
+ *   agent-planner "Add user authentication" --output=../plan.json
  */
 import {
   createAgentSession,
@@ -55,7 +55,7 @@ function parseArgs(): CliArgs {
 
   // Parse optional flags
   let model = "anthropic/claude-sonnet-4-6"; // default
-  let output = "plan.json"; // default
+  let output = "../plan.json"; // default
 
   for (let i = 1; i < args.length; i++) {
     if (args[i].startsWith("--model=")) {

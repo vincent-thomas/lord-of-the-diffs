@@ -26,7 +26,7 @@ if [[ ! -f "$LOTD_CONFIG_FILE" ]]; then
 fi
 
 PROMPT="$*"
-PLAN_FILE="plan.json"
+PLAN_FILE="../plan.json"
 
 echo ""
 echo "┌─ Step 1: Planning"
@@ -116,7 +116,7 @@ echo ""
 
 # Run coder for each task
 for ((i=0; i<TASK_COUNT; i++)); do
-  nix run .#coder -- ./plan.json $i
+  nix run .#coder -- ../plan.json $i
 done
 
 echo ""

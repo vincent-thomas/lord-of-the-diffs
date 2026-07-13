@@ -2,11 +2,11 @@
 /**
  * agent-validator — validates implementation against plan
  *
- * Loads plan.json, reads the commits/code, and validates that the implementation
+ * Loads ../plan.json, reads the commits/code, and validates that the implementation
  * matches what was planned. Can flag issues via `not_correct` tool or fix them directly.
  *
  * Usage:
- *   agent-validator                    # Validate against plan.json
+ *   agent-validator                    # Validate against ../plan.json
  *   agent-validator --plan=custom.json # Use custom plan file
  *   agent-validator --model=opus       # Use opus for validation
  */
@@ -33,7 +33,7 @@ function parseArgs(): CliArgs {
   const args = process.argv.slice(2);
 
   let model = "anthropic/claude-sonnet-4-6"; // default
-  let planPath = "plan.json"; // default
+  let planPath = "../plan.json"; // default
 
   for (const arg of args) {
     if (arg.startsWith("--model=")) {

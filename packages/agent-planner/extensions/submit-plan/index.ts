@@ -3,7 +3,7 @@
  *
  * `submit_plan` tool — the planner's structured output channel. It takes the
  * full decomposition as typed parameters, validates it, and writes it as a
- * JSON artifact to disk (PLANNER_OUTPUT, default ./plan.json), separate from
+ * JSON artifact to disk (PLANNER_OUTPUT, default ../plan.json), separate from
  * everything the planner narrates while working. This is what makes planning a
  * distinct, machine-consumable phase: the orchestrator reads the artifact, not
  * the transcript.
@@ -37,7 +37,7 @@ export default function (pi: ExtensionAPI) {
       "already identified multiple issues, pick the FIRST one you found and call " +
       "this tool NOW. Continuing to explore after finding an issue is a failure. " +
       "Listing multiple issues is a failure. Call this tool with ONE plan. " +
-      "The plan is written as JSON to PLANNER_OUTPUT (default ./plan.json).",
+      "The plan is written as JSON to PLANNER_OUTPUT (default ../plan.json).",
     promptSnippet: "Submit plan for the ONE issue you found",
     parameters: TObject({
       what: TString({
